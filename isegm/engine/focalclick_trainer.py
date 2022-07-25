@@ -121,6 +121,7 @@ class ISTrainer(object):
         logger.info(f'Starting Epoch: {start_epoch}')
         logger.info(f'Total Epochs: {num_epochs}')
         for epoch in range(start_epoch, num_epochs):
+            print(f"Epoch number: {epoch}")
             self.training(epoch)
             #if validation:
             #    self.validation(epoch)
@@ -147,6 +148,7 @@ class ISTrainer(object):
         train_loss = 0.0
         for i, batch_data in enumerate(tbar):
             global_step = epoch * len(self.train_data) + i
+            print(f"Global step: {global_step}")
             use_fp16 = False
             if use_fp16:
                 self.optim.zero_grad()

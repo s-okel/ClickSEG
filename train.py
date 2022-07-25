@@ -8,12 +8,14 @@ from isegm.utils.exp import init_experiment
 
 def main():
     args = parse_args()
+    print("Parsed arguments")
     if args.temp_model_path:
         model_script = load_module(args.temp_model_path)
     else:
         model_script = load_module(args.model_path)
 
     model_base_name = getattr(model_script, 'MODEL_NAME', None)
+    print(f"Model: {model_base_name}")
 
     args.distributed = 'WORLD_SIZE' in os.environ
     cfg = init_experiment(args, model_base_name)

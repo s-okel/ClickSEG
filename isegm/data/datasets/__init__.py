@@ -17,3 +17,4 @@ from .saliency import SaliencyDataset
 from .ytb_vos import YouTubeDataset
 from .hflicker import HFlickerDataset
 from .thinobject import ThinObjectDataset
+from .panc import PancDataset
