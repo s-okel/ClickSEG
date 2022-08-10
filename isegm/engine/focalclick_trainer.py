@@ -17,7 +17,9 @@ from isegm.utils.serialization import get_config_repr
 from isegm.utils.distributed import get_dp_wrapper, get_sampler, reduce_loss_dict
 from .optimizer import get_optimizer
 from torch.cuda.amp import autocast as autocast, GradScaler
+
 scaler = GradScaler()
+
 
 class ISTrainer(object):
     def __init__(self, model, cfg, model_cfg, loss_cfg,
@@ -123,7 +125,7 @@ class ISTrainer(object):
         for epoch in range(start_epoch, num_epochs):
             print(f"Epoch number: {epoch}")
             self.training(epoch)
-            #if validation:
+            # if validation:
             #    self.validation(epoch)
 
     def training(self, epoch):
@@ -135,14 +137,14 @@ class ISTrainer(object):
             self.train_data.sampler.set_epoch(epoch)
 
         log_prefix = 'Train' + self.task_prefix.capitalize()
-        tbar = tqdm(self.train_data, file=self.tqdm_out, ncols=100)\
+        tbar = tqdm(self.train_data, file=self.tqdm_out, ncols=100) \
             if self.is_master else self.train_data
 
         for metric in self.train_metrics:
             metric.reset_epoch_stats()
 
         self.net.train()
-        #for m in self.net.feature_extractor.modules():
+        # for m in self.net.feature_extractor.modules():
         #        m.eval()
 
         train_loss = 0.0
@@ -179,13 +181,14 @@ class ISTrainer(object):
                         v.log_states(self.sw, f'{log_prefix}Losses/{k}', global_step)
 
                 if self.image_dump_interval > 0 and global_step % self.image_dump_interval == 0:
-                    self.save_visualization(splitted_batch_data, outputs,refine_output, global_step, prefix='train')
+                    self.save_visualization(splitted_batch_data, outputs, refine_output, global_step, prefix='train')
 
                 self.sw.add_scalar(tag=f'{log_prefix}States/learning_rate',
-                                   value=self.lr if not hasattr(self, 'lr_scheduler') else self.lr_scheduler.get_lr()[-1],
+                                   value=self.lr if not hasattr(self, 'lr_scheduler') else self.lr_scheduler.get_lr()[
+                                       -1],
                                    global_step=global_step)
 
-                tbar.set_description(f'Epoch {epoch}, training loss {train_loss/(i+1):.4f}')
+                tbar.set_description(f'Epoch {epoch}, training loss {train_loss / (i + 1):.4f}')
                 for metric in self.train_metrics:
                     metric.log_states(self.sw, f'{log_prefix}Metrics/{metric.name}', global_step)
 
@@ -238,7 +241,7 @@ class ISTrainer(object):
             val_loss += batch_losses_logging['overall'].item()
 
             if self.is_master:
-                tbar.set_description(f'Epoch {epoch}, validation loss: {val_loss/(i + 1):.4f}')
+                tbar.set_description(f'Epoch {epoch}, validation loss: {val_loss / (i + 1):.4f}')
                 for metric in self.val_metrics:
                     metric.log_states(self.sw, f'{log_prefix}Metrics/{metric.name}', global_step)
 
@@ -280,15 +283,15 @@ class ISTrainer(object):
                     else:
                         eval_model = self.click_models[click_indx]
 
-
                     net_input = torch.cat((image, prev_output), dim=1) if self.net.with_prev_mask else image
                     prev_output = torch.sigmoid(eval_model(net_input, points)['instances'])
 
-                    points, points_focus = get_next_points_removeall(prev_output, orig_gt_mask, points, points_focus, rois, click_indx + 1)
+                    points, points_focus = get_next_points_removeall(prev_output, orig_gt_mask, points, points_focus,
+                                                                     rois, click_indx + 1)
 
                     if not validation:
                         self.net.train()
-                        #for m in self.net.feature_extractor.modules():
+                        # for m in self.net.feature_extractor.modules():
                         #        m.eval()
 
                 if self.net.with_prev_mask and self.prev_mask_drop_prob > 0 and last_click_indx is not None:
@@ -303,34 +306,36 @@ class ISTrainer(object):
             output = self.net(net_input, points)
 
             # ====== refine =====
-            images_focus, points_focus, rois  = batch_data['images_focus'], batch_data['points_focus'], batch_data['rois']
+            images_focus, points_focus, rois = batch_data['images_focus'], batch_data['points_focus'], batch_data[
+                'rois']
             full_feature, full_logits = output['feature'], output['instances']
-            bboxes = torch.chunk(rois,rois.shape[0],dim=0)
-            #print( len(bboxes), bboxes[0].shape, rois.shape  )
+            bboxes = torch.chunk(rois, rois.shape[0], dim=0)
+            # print( len(bboxes), bboxes[0].shape, rois.shape  )
             refine_output = self.net.refine(images_focus, points_focus, full_feature, full_logits, bboxes)
 
             loss = 0.0
             loss = self.add_loss('instance_loss', loss, losses_logging, validation,
                                  lambda: (output['instances'], batch_data['instances']))
-            
+
             loss = self.add_loss('instance_click_loss', loss, losses_logging, validation,
                                  lambda: (output['instances'], batch_data['instances'], output['click_map']))
-                                 
+
             loss = self.add_loss('instance_aux_loss', loss, losses_logging, validation,
                                  lambda: (output['instances_aux'], batch_data['instances']))
 
             loss = self.add_loss('trimap_loss', loss, losses_logging, validation,
                                  lambda: (refine_output['trimap'], batch_data['trimap_focus']))
-                
+
             loss = self.add_loss('instance_refine_loss', loss, losses_logging, validation,
-                                 lambda: (refine_output['instances_refined'], batch_data['instances_focus'],batch_data['trimap_focus']))
+                                 lambda: (refine_output['instances_refined'], batch_data['instances_focus'],
+                                          batch_data['trimap_focus']))
 
             if self.is_master:
                 with torch.no_grad():
                     for m in metrics:
                         m.update(*(output.get(x) for x in m.pred_outputs),
                                  *(batch_data[x] for x in m.gt_outputs))
-        return loss, losses_logging, batch_data, output,refine_output
+        return loss, losses_logging, batch_data, output, refine_output
 
     def add_loss(self, loss_name, total_loss, losses_logging, validation, lambda_loss_inputs):
         loss_cfg = self.loss_cfg if not validation else self.val_loss_cfg
@@ -365,43 +370,39 @@ class ISTrainer(object):
         image_with_points = draw_points(images, points[:self.max_interactive_points], (0, 255, 0))
         image_with_points = draw_points(image_with_points, points[self.max_interactive_points:], (0, 0, 255))
 
-
         images_focus = splitted_batch_data['images_focus'][0].cpu().numpy().transpose((1, 2, 0)) * 255
-        
-        instance_masks_focus = splitted_batch_data['instances_focus'][0,0].detach().cpu().numpy()
-        #gt_mask_focus = draw_probmap(instance_masks_focus)
+
+        instance_masks_focus = splitted_batch_data['instances_focus'][0, 0].detach().cpu().numpy()
+        # gt_mask_focus = draw_probmap(instance_masks_focus)
         focus_color_mask = np.zeros_like(images_focus)
-        focus_color_mask[:,:,0] = instance_masks_focus * 255
+        focus_color_mask[:, :, 0] = instance_masks_focus * 255
         gt_masked_focus = 0.5 * images_focus + 0.5 * focus_color_mask
 
         images_focus_with_points = draw_points(gt_masked_focus, points_focus[:self.max_interactive_points], (0, 255, 0))
-        images_focus_with_points = draw_points(images_focus_with_points, points_focus[self.max_interactive_points:], (0, 0, 255))
+        images_focus_with_points = draw_points(images_focus_with_points, points_focus[self.max_interactive_points:],
+                                               (0, 0, 255))
 
-        
-        instance_masks = splitted_batch_data['instances'][0,0].detach().cpu().numpy()
+        instance_masks = splitted_batch_data['instances'][0, 0].detach().cpu().numpy()
         gt_mask = draw_probmap(instance_masks)
         gt_color_mask = np.zeros_like(images)
-        gt_color_mask[:,:,0] = (instance_masks > 0.5) * 255
+        gt_color_mask[:, :, 0] = (instance_masks > 0.5) * 255
         gt_masked_full = 0.5 * images + 0.5 * gt_color_mask
 
-
-
-        trimap_focus = splitted_batch_data['trimap_focus'][0,0].detach().cpu().numpy()
+        trimap_focus = splitted_batch_data['trimap_focus'][0, 0].detach().cpu().numpy()
         trimap_focus = draw_probmap(trimap_focus)
 
-        prev_masks = splitted_batch_data['prev_mask'][0,0].detach().cpu().numpy()
+        prev_masks = splitted_batch_data['prev_mask'][0, 0].detach().cpu().numpy()
         prev_masks = draw_probmap(prev_masks)
 
-        
-        predicted_instance_masks = torch.sigmoid(outputs['instances'])[0,0].detach().cpu().numpy()
+        predicted_instance_masks = torch.sigmoid(outputs['instances'])[0, 0].detach().cpu().numpy()
         predicted_instance_masks = draw_probmap(predicted_instance_masks)
 
-        predicted_trimap_focus = torch.sigmoid(refine_output['trimap'])[0,0].detach().cpu().numpy()
+        predicted_trimap_focus = torch.sigmoid(refine_output['trimap'])[0, 0].detach().cpu().numpy()
         predicted_trimap_focus = draw_probmap(predicted_trimap_focus)
 
-        predicted_mask_focus = torch.sigmoid(refine_output['instances_refined'])[0,0].detach().cpu().numpy()
+        predicted_mask_focus = torch.sigmoid(refine_output['instances_refined'])[0, 0].detach().cpu().numpy()
         pred_color_mask = np.zeros_like(images_focus)
-        pred_color_mask[:,:,0] = (predicted_mask_focus > 0.5) * 255
+        pred_color_mask[:, :, 0] = (predicted_mask_focus > 0.5) * 255
         pred_masked_image = 0.5 * images_focus + 0.5 * pred_color_mask
         predicted_mask_focus = draw_probmap(predicted_mask_focus)
 
@@ -415,10 +416,13 @@ class ISTrainer(object):
         pred_masked_image = add_tag(pred_masked_image, 'Refine Pred')
         predicted_trimap_focus = add_tag(predicted_trimap_focus, 'Trimap Pred')
 
-        viz_image_full = np.hstack((image_with_points, gt_masked_full,  predicted_instance_masks, prev_masks )).astype(np.uint8)
-        viz_image_focus = np.hstack((images_focus_with_points,predicted_mask_focus,  pred_masked_image, predicted_trimap_focus )).astype(np.uint8)
-        viz_image = np.vstack([viz_image_full,viz_image_focus])
-        
+        viz_image_full = np.hstack((image_with_points, gt_masked_full, predicted_instance_masks, prev_masks)).astype(
+            np.uint8)
+        viz_image_focus = np.hstack(
+            (images_focus_with_points, predicted_mask_focus, pred_masked_image, predicted_trimap_focus)).astype(
+            np.uint8)
+        viz_image = np.vstack([viz_image_full, viz_image_focus])
+
         _save_image('focalclick_vis', viz_image[:, :, ::-1])
 
     def _load_weights(self, net):
@@ -442,15 +446,12 @@ class ISTrainer(object):
         return self.cfg.local_rank == 0
 
 
-
-
-
-def get_next_points_removeall(pred, gt, points, points_focus, rois, click_indx, pred_thresh=0.49, remove_prob = 0.0):
+def get_next_points_removeall(pred, gt, points, points_focus, rois, click_indx, pred_thresh=0.49, remove_prob=0.0):
     assert click_indx > 0
     pred = pred.cpu().numpy()[:, 0, :, :]
     gt = gt.cpu().numpy()[:, 0, :, :] > 0.5
     rois = rois.cpu().numpy()
-    h,w = gt.shape[-2], gt.shape[-1]
+    h, w = gt.shape[-2], gt.shape[-1]
 
     fn_mask = np.logical_and(gt, pred < pred_thresh)
     fp_mask = np.logical_and(np.logical_not(gt), pred > pred_thresh)
@@ -483,13 +484,13 @@ def get_next_points_removeall(pred, gt, points, points_focus, rois, click_indx, 
                 points[bindx, 2 * num_points - click_indx, 0] = float(coords[0])
                 points[bindx, 2 * num_points - click_indx, 1] = float(coords[1])
                 points[bindx, 2 * num_points - click_indx, 2] = float(click_indx)
-        
+
         x1, y1, x2, y2 = rois[bindx]
         point_focus = points[bindx]
-        hc,wc = y2-y1, x2-x1
-        ry,rx = h/hc, w/wc
-        bias = torch.tensor([y1,x1,0]).to(points.device)
-        ratio = torch.tensor([ry,rx,1]).to(points.device)
+        hc, wc = y2 - y1, x2 - x1
+        ry, rx = h / hc, w / wc
+        bias = torch.tensor([y1, x1, 0]).to(points.device)
+        ratio = torch.tensor([ry, rx, 1]).to(points.device)
         points_focus[bindx] = (point_focus - bias) * ratio
     return points, points_focus
 
@@ -500,9 +501,9 @@ def load_weights(model, path_to_weights):
 
     new_keys = set(new_state_dict.keys())
     old_keys = set(current_state_dict.keys())
-    print('='*10)
-    print(' unexpected: ', new_keys - old_keys )
-    print(' lacked: ', old_keys - new_keys )
-    print('='*10)
+    print('=' * 10)
+    print(' unexpected: ', new_keys - old_keys)
+    print(' lacked: ', old_keys - new_keys)
+    print('=' * 10)
     current_state_dict.update(new_state_dict)
     model.load_state_dict(current_state_dict, strict=False)

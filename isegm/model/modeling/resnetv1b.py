@@ -242,7 +242,7 @@ def resnet34_v1b(pretrained=False, **kwargs):
             model_dict.keys()
         )
         '''
-        filtered_orig_dict = torch.load('/home/admin/workspace/project/data/weights/gluon_resnet34_v1b-c6d82d59.pth',map_location='cpu')#['state_dict']
+        filtered_orig_dict = torch.load('./data/weights/gluon_resnet34_v1b-c6d82d59.pth',map_location='cpu')#['state_dict']
         model_dict.update(filtered_orig_dict)
         model.load_state_dict(model_dict)
     return model

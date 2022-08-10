@@ -12,7 +12,7 @@ DAVIS585_PATH: "./data/datasets/InterDavis/Selected_480P"
 PANC_MVAL_PATH: "./data/datasets/Panc"
 
 # Train datasets
-SBD_PATH:  "./data/datasets/SBD/dataset"
+SBD_PATH:  "./data/datasets/SBD"
 COCO_PATH: "./data/dataset/COCO"
 LVIS_PATH: "./data/datasets/COCO_LVIS"
 LVIS_v1_PATH: "./data/datasets/COCO_LVIS"
