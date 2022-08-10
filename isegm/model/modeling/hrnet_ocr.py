@@ -161,7 +161,7 @@ class HighResolutionNet(nn.Module):
         self.ocr_width = ocr_width
         self.align_corners = align_corners
 
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1, bias=False)  # 1 for grayscale image
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn1 = norm_layer(64)
         self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn2 = norm_layer(64)
@@ -413,7 +413,4 @@ class HighResolutionNet(nn.Module):
                            if k in model_dict.keys()}
 
         model_dict.update(pretrained_dict)
-        # reduce first layer weights to 1 channel
-        one_ch_weight = model_dict['conv1.weight'][:, 0, :, :]
-        model_dict['conv1.weight'] = one_ch_weight[:, None, :, :]
         self.load_state_dict(model_dict)

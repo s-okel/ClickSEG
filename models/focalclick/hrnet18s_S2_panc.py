@@ -19,7 +19,7 @@ def init_model(cfg):
     model = HRNetModel(pipeline_version='s2', width=18, ocr_width=48, small=True, with_aux_output=True,
                        use_leaky_relu=True,
                        use_rgb_conv=False, use_disks=True, norm_radius=5,
-                       with_prev_mask=True, grayscale=True)
+                       with_prev_mask=True)
 
     model.to(cfg.device)
     model.apply(initializer.XavierGluon(rnd_type='gaussian', magnitude=2.0))
@@ -44,8 +44,7 @@ def train(model, cfg, model_cfg):
     loss_cfg.trimap_loss_weight = 1.0
 
     train_augmentator = AlignedAugmentator(ratio=[0.3, 1.3], target_size=crop_size, flip=True,
-                                           distribution='Gaussian', gs_center=0.8, gs_sd=0.4, grayscale=True
-                                           )
+                                           distribution='Gaussian', gs_center=0.8, gs_sd=0.4)
 
     val_augmentator = Compose([
         UniformRandomResize(scale_range=(0.75, 1.25)),
@@ -65,6 +64,7 @@ def train(model, cfg, model_cfg):
         min_object_area=20,
         keep_background_prob=0.01,
         points_sampler=points_sampler,
+        label='aorta'
     )
 
     valset = PancDataset(
@@ -72,7 +72,8 @@ def train(model, cfg, model_cfg):
         augmentator=val_augmentator,
         min_object_area=20,
         points_sampler=points_sampler,
-        epoch_len=500
+        epoch_len=500,
+        label='aorta'
     )
 
     optimizer_params = {
