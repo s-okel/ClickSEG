@@ -200,7 +200,7 @@ class ISTrainer(object):
             self.lr_scheduler.step()
 
         self.epoch_train_loss.append(train_loss / len(tbar))
-        with open(str(self.cfg.CHECKPOINTS_PATH) + r"\train_losses.txt", "w") as f:
+        with open("./" + str(self.cfg.CHECKPOINTS_PATH) + r"/train_losses.txt", "w") as f:
             f.write(str(self.epoch_train_loss))
 
     def validation(self, epoch):
@@ -249,7 +249,7 @@ class ISTrainer(object):
                             multi_gpu=self.cfg.multi_gpu, name=f"epoch-{epoch}-val-loss-{val_loss / len(tbar):.2f}")
 
         self.epoch_val_loss.append(val_loss / len(tbar))
-        with open(str(self.cfg.CHECKPOINTS_PATH) + r"\val_losses.txt", "w") as f:
+        with open("./" + str(self.cfg.CHECKPOINTS_PATH) + r"/val_losses.txt", "w") as f:
             f.write(str(self.epoch_val_loss))
 
     def batch_forward(self, batch_data, validation=False):
