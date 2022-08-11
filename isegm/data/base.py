@@ -118,13 +118,11 @@ class ISDataset(torch.utils.data.dataset.Dataset):
                 else:
                     index = np.random.randint(len(self.dataset_samples)-1)
 
-
     def remove_small_regions(self,mask):
         mask = mask[0] > 0.5
         mask = skimage.morphology.remove_small_objects(mask,min_size= 900)
         mask = np.expand_dims(mask,0).astype(np.float32)
         return mask
-
 
     def sampling_roi_full_object(self, gt_mask, min_size=32):
         max_mask = getLargestCC(gt_mask)
