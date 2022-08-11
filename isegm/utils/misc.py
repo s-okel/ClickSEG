@@ -12,11 +12,11 @@ def get_dims_with_exclusion(dim, exclude=None):
     return dims
 
 
-def save_checkpoint(net, checkpoints_path, epoch=None, prefix='', verbose=True, multi_gpu=False):
+def save_checkpoint(net, checkpoints_path, epoch=None, prefix='', verbose=True, multi_gpu=False, name=''):
     if epoch is None:
-        checkpoint_name = 'last_checkpoint.pth'
+        checkpoint_name = f'{name}.pth'
     else:
-        checkpoint_name = f'{epoch:03d}.pth'
+        checkpoint_name = f'{name}-{epoch:03d}.pth'
 
     if prefix:
         checkpoint_name = f'{prefix}_{checkpoint_name}'

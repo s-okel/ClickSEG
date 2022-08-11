@@ -1,11 +1,11 @@
 from isegm.utils.exp_imports.default import *
-
-MODEL_NAME = 'hrnet32_S2_panc'
 from isegm.data.compose import ComposeDataset, ProportionalComposeDataset
 import torch.nn as nn
 from isegm.data.aligned_augmentation import AlignedAugmentator
 from isegm.engine.focalclick_trainer import ISTrainer
 
+label = "aorta"
+MODEL_NAME = f'hrnet32_S2_{label}'
 
 def main(cfg):
     model, model_cfg = init_model(cfg)
@@ -14,7 +14,7 @@ def main(cfg):
 
 def init_model(cfg):
     model_cfg = edict()
-    model_cfg.crop_size = (128, 128)
+    model_cfg.crop_size = (96, 96)
     model_cfg.num_max_points = 24
     model = HRNetModel(pipeline_version='s2', width=32, ocr_width=128, small=False, with_aux_output=True,
                        use_leaky_relu=True,
@@ -29,7 +29,7 @@ def init_model(cfg):
 
 
 def train(model, cfg, model_cfg):
-    cfg.batch_size = 28 if cfg.batch_size < 1 else cfg.batch_size
+    cfg.batch_size = 32 if cfg.batch_size < 1 else cfg.batch_size
     cfg.val_batch_size = cfg.batch_size
     crop_size = model_cfg.crop_size
 
@@ -60,16 +60,20 @@ def train(model, cfg, model_cfg):
 
     trainset = PancDataset(
         split='train',
+        label=label,
+        one_input_channel=False,
         augmentator=train_augmentator,
-        min_object_area=80,
+        min_object_area=0,
         keep_background_prob=0.01,
         points_sampler=points_sampler,
     )
 
     valset = PancDataset(
         split='val',
+        label=label,
+        one_input_channel=False,
         augmentator=val_augmentator,
-        min_object_area=80,
+        min_object_area=0,
         points_sampler=points_sampler,
         epoch_len=500
     )

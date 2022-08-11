@@ -59,6 +59,9 @@ class ISTrainer(object):
         if additional_val_metrics is not None:
             self.val_metrics.extend(additional_val_metrics)
 
+        self.epoch_train_loss = []
+        self.epoch_val_loss = []
+
         self.checkpoint_interval = checkpoint_interval
         self.image_dump_interval = image_dump_interval
         self.task_prefix = ''
@@ -193,20 +196,12 @@ class ISTrainer(object):
                                    value=metric.get_epoch_value(),
                                    global_step=epoch, disable_avg=True)
 
-            save_checkpoint(self.net, self.cfg.CHECKPOINTS_PATH, prefix=self.task_prefix,
-                            epoch=None, multi_gpu=self.cfg.multi_gpu)
-
-            if isinstance(self.checkpoint_interval, (list, tuple)):
-                checkpoint_interval = [x for x in self.checkpoint_interval if x[0] <= epoch][-1][1]
-            else:
-                checkpoint_interval = self.checkpoint_interval
-
-            if epoch % checkpoint_interval == 0:
-                save_checkpoint(self.net, self.cfg.CHECKPOINTS_PATH, prefix=self.task_prefix,
-                                epoch=epoch, multi_gpu=self.cfg.multi_gpu)
-
         if hasattr(self, 'lr_scheduler'):
             self.lr_scheduler.step()
+
+        self.epoch_train_loss.append(train_loss / len(tbar))
+        with open(str(self.cfg.CHECKPOINTS_PATH) + r"\train_losses.txt", "w") as f:
+            f.write(str(self.epoch_train_loss))
 
     def validation(self, epoch):
         if self.sw is None and self.is_master:
@@ -248,6 +243,14 @@ class ISTrainer(object):
             for metric in self.val_metrics:
                 self.sw.add_scalar(tag=f'{log_prefix}Metrics/{metric.name}', value=metric.get_epoch_value(),
                                    global_step=epoch, disable_avg=True)
+
+        if (epoch + 1) % 10 == 0:
+            save_checkpoint(self.net, self.cfg.CHECKPOINTS_PATH, prefix=self.task_prefix, epoch=None,
+                            multi_gpu=self.cfg.multi_gpu, name=f"epoch-{epoch}-val-loss-{val_loss / len(tbar):.2f}")
+
+        self.epoch_val_loss.append(val_loss / len(tbar))
+        with open(str(self.cfg.CHECKPOINTS_PATH) + r"\val_losses.txt", "w") as f:
+            f.write(str(self.epoch_val_loss))
 
     def batch_forward(self, batch_data, validation=False):
         metrics = self.val_metrics if validation else self.train_metrics
