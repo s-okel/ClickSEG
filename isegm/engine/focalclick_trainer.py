@@ -127,8 +127,8 @@ class ISTrainer(object):
         logger.info(f'Total Epochs: {num_epochs}')
         for epoch in range(start_epoch, num_epochs):
             self.training(epoch)
-            # if validation:
-            #    self.validation(epoch)
+            if validation:
+                self.validation(epoch)
 
     def training(self, epoch):
         if self.sw is None and self.is_master:
@@ -223,7 +223,7 @@ class ISTrainer(object):
         self.net.eval()
         for i, batch_data in enumerate(tbar):
             global_step = epoch * len(self.val_data) + i
-            loss, batch_losses_logging, splitted_batch_data, outputs = \
+            loss, batch_losses_logging, splitted_batch_data, outputs, refined_output = \
                 self.batch_forward(batch_data, validation=True)
 
             batch_losses_logging['overall'] = loss

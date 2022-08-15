@@ -15,9 +15,12 @@ from isegm.utils.vis import draw_probmap, draw_points, add_tag
 from isegm.utils.misc import save_checkpoint
 from isegm.utils.serialization import get_config_repr
 from isegm.utils.distributed import get_dp_wrapper, get_sampler, reduce_loss_dict
+from .baseline_trainer import get_next_points
 from .optimizer import get_optimizer
 from torch.cuda.amp import autocast as autocast, GradScaler
+
 scaler = GradScaler()
+
 
 class ISTrainer(object):
     def __init__(self, model, cfg, model_cfg, loss_cfg,
@@ -125,8 +128,8 @@ class ISTrainer(object):
         logger.info(f'Total Epochs: {num_epochs}')
         for epoch in range(start_epoch, num_epochs):
             self.training(epoch)
-            #if validation:
-            #    self.validation(epoch)
+            if validation:
+               self.validation(epoch)
 
     def training(self, epoch):
         if self.sw is None and self.is_master:
@@ -137,14 +140,14 @@ class ISTrainer(object):
             self.train_data.sampler.set_epoch(epoch)
 
         log_prefix = 'Train' + self.task_prefix.capitalize()
-        tbar = tqdm(self.train_data, file=self.tqdm_out, ncols=100)\
+        tbar = tqdm(self.train_data, file=self.tqdm_out, ncols=100) \
             if self.is_master else self.train_data
 
         for metric in self.train_metrics:
             metric.reset_epoch_stats()
 
         self.net.train()
-        #for m in self.net.feature_extractor.modules():
+        # for m in self.net.feature_extractor.modules():
         #        m.eval()
 
         train_loss = 0.0
@@ -180,13 +183,14 @@ class ISTrainer(object):
                         v.log_states(self.sw, f'{log_prefix}Losses/{k}', global_step)
 
                 if self.image_dump_interval > 0 and global_step % self.image_dump_interval == 0:
-                    self.save_visualization(splitted_batch_data, outputs,global_step, prefix='train')
+                    self.save_visualization(splitted_batch_data, outputs, global_step, prefix='train')
 
                 self.sw.add_scalar(tag=f'{log_prefix}States/learning_rate',
-                                   value=self.lr if not hasattr(self, 'lr_scheduler') else self.lr_scheduler.get_lr()[-1],
+                                   value=self.lr if not hasattr(self, 'lr_scheduler') else self.lr_scheduler.get_lr()[
+                                       -1],
                                    global_step=global_step)
 
-                tbar.set_description(f'Epoch {epoch}, training loss {train_loss/(i+1):.4f}')
+                tbar.set_description(f'Epoch {epoch}, training loss {train_loss / (i + 1):.4f}')
                 for metric in self.train_metrics:
                     metric.log_states(self.sw, f'{log_prefix}Metrics/{metric.name}', global_step)
 
@@ -231,7 +235,7 @@ class ISTrainer(object):
             val_loss += batch_losses_logging['overall'].item()
 
             if self.is_master:
-                tbar.set_description(f'Epoch {epoch}, validation loss: {val_loss/(i + 1):.4f}')
+                tbar.set_description(f'Epoch {epoch}, validation loss: {val_loss / (i + 1):.4f}')
                 for metric in self.val_metrics:
                     metric.log_states(self.sw, f'{log_prefix}Metrics/{metric.name}', global_step)
 
@@ -277,11 +281,9 @@ class ISTrainer(object):
                     else:
                         eval_model = self.click_models[click_indx]
 
-
                     net_input = torch.cat((image, prev_output), dim=1) if self.net.with_prev_mask else image
                     prev_output = torch.sigmoid(eval_model(net_input, points)['instances'])
                     points = get_next_points(prev_output, orig_gt_mask, points, click_indx + 1)
-                   
 
                     if not validation:
                         self.net.train()
@@ -296,16 +298,15 @@ class ISTrainer(object):
             net_input = torch.cat((image, prev_output), dim=1) if self.net.with_prev_mask else image
             output = self.net(net_input, points)
 
-
             loss = 0.0
             loss = self.add_loss('instance_loss', loss, losses_logging, validation,
                                  lambda: (output['instances'], batch_data['instances']))
-                                 
+
             loss = self.add_loss('fdm_instances_loss', loss, losses_logging, validation,
                                  lambda: (output['fdm_instances'], batch_data['instances']))
 
             loss = self.add_loss('diversity_loss', loss, losses_logging, validation,
-                                 lambda: (output['latent_instances'], batch_data['instances'], output['click_map'] ))
+                                 lambda: (output['latent_instances'], batch_data['instances'], output['click_map']))
 
             if self.is_master:
                 with torch.no_grad():
@@ -344,47 +345,46 @@ class ISTrainer(object):
         images = splitted_batch_data['images'][0].cpu().numpy().transpose((1, 2, 0)) * 255
         image_with_points = draw_points(images, points[:self.max_interactive_points], (0, 255, 0))
         image_with_points = draw_points(image_with_points, points[self.max_interactive_points:], (0, 0, 255))
-        
-        instance_masks = splitted_batch_data['instances'][0,0].detach().cpu().numpy()
+
+        instance_masks = splitted_batch_data['instances'][0, 0].detach().cpu().numpy()
         gt_mask = draw_probmap(instance_masks)
         gt_color_mask = np.zeros_like(images)
-        gt_color_mask[:,:,0] = (instance_masks > 0.5) * 255
-        gt_masked_image = 0.5 * images + 0.5 * gt_color_mask #vis
+        gt_color_mask[:, :, 0] = (instance_masks > 0.5) * 255
+        gt_masked_image = 0.5 * images + 0.5 * gt_color_mask  # vis
 
-        prev_masks = splitted_batch_data['prev_mask'][0,0].detach().cpu().numpy()
+        prev_masks = splitted_batch_data['prev_mask'][0, 0].detach().cpu().numpy()
         prev_masks = draw_probmap(prev_masks)
 
-        
-        predicted_instance_masks = torch.sigmoid(outputs['instances'])[0,0].detach().cpu().numpy()
+        predicted_instance_masks = torch.sigmoid(outputs['instances'])[0, 0].detach().cpu().numpy()
         pred_color_mask = np.zeros_like(images)
-        pred_color_mask[:,:,0] = (predicted_instance_masks > 0.5) * 255
+        pred_color_mask[:, :, 0] = (predicted_instance_masks > 0.5) * 255
         pred_masked_image = 0.5 * images + 0.5 * pred_color_mask
         predicted_instance_masks = draw_probmap(predicted_instance_masks)
 
-        predicted_fdm_masks = outputs['fdm_instances'][0,0].detach().cpu().numpy()
+        predicted_fdm_masks = outputs['fdm_instances'][0, 0].detach().cpu().numpy()
         pred_color_mask_fdm = np.zeros_like(images)
-        pred_color_mask_fdm[:,:,0] = (predicted_fdm_masks) * 255
+        pred_color_mask_fdm[:, :, 0] = (predicted_fdm_masks) * 255
         pred_fdm_image = 0.5 * images + 0.5 * pred_color_mask_fdm
         predicted_fdm_masks = draw_probmap(predicted_fdm_masks)
 
-
         latent_list = []
-        latent_preds = torch.sigmoid( outputs['latent_instances']) [0].detach().cpu().numpy()
+        latent_preds = torch.sigmoid(outputs['latent_instances'])[0].detach().cpu().numpy()
         for i in range(latent_preds.shape[0]):
             pred = latent_preds[i]
-            pred =  draw_probmap(pred)
-            pred = add_tag(pred, 'Latent Pred: '+ str(i+1))
+            pred = draw_probmap(pred)
+            pred = add_tag(pred, 'Latent Pred: ' + str(i + 1))
             latent_list.append(pred)
         vis_latent = np.hstack(latent_list).astype(np.uint8)
-        #print(vis_latent.shape, pred.shape )
+        # print(vis_latent.shape, pred.shape )
 
-        image_with_points = add_tag(image_with_points,'Image with Points')
-        gt_masked_image = add_tag(gt_masked_image,'Ground Truth Mask')
-        pred_masked_image = add_tag(pred_masked_image,'Prediction')
-        pred_fdm_image = add_tag(pred_fdm_image,'FDM Destination Constrain')
+        image_with_points = add_tag(image_with_points, 'Image with Points')
+        gt_masked_image = add_tag(gt_masked_image, 'Ground Truth Mask')
+        pred_masked_image = add_tag(pred_masked_image, 'Prediction')
+        pred_fdm_image = add_tag(pred_fdm_image, 'FDM Destination Constrain')
 
-        vis_image_full = np.hstack((image_with_points, gt_masked_image, pred_masked_image, pred_fdm_image)).astype(np.uint8)
-        vis_image_full = np.vstack( (vis_image_full, vis_latent))
+        vis_image_full = np.hstack((image_with_points, gt_masked_image, pred_masked_image, pred_fdm_image)).astype(
+            np.uint8)
+        vis_image_full = np.vstack((vis_image_full, vis_latent))
         vis_image = vis_image_full
         _save_image('cdnet_vis', vis_image[:, :, ::-1])
 
@@ -409,15 +409,12 @@ class ISTrainer(object):
         return self.cfg.local_rank == 0
 
 
-
-
-
-def get_next_points_removeall(pred, gt, points, points_focus, rois, click_indx, pred_thresh=0.49, remove_prob = 0.1):
+def get_next_points_removeall(pred, gt, points, points_focus, rois, click_indx, pred_thresh=0.49, remove_prob=0.1):
     assert click_indx > 0
     pred = pred.cpu().numpy()[:, 0, :, :]
     gt = gt.cpu().numpy()[:, 0, :, :] > 0.5
     rois = rois.cpu().numpy()
-    h,w = gt.shape[-2], gt.shape[-1]
+    h, w = gt.shape[-2], gt.shape[-1]
 
     fn_mask = np.logical_and(gt, pred < pred_thresh)
     fp_mask = np.logical_and(np.logical_not(gt), pred > pred_thresh)
@@ -426,7 +423,7 @@ def get_next_points_removeall(pred, gt, points, points_focus, rois, click_indx, 
     fp_mask = np.pad(fp_mask, ((0, 0), (1, 1), (1, 1)), 'constant').astype(np.uint8)
     num_points = points.size(1) // 2
     points = points.clone()
-    #print(points.shape, points[0]) # [batch, 48, 3]
+    # print(points.shape, points[0]) # [batch, 48, 3]
 
     for bindx in range(fn_mask.shape[0]):
         fn_mask_dt = cv2.distanceTransform(fn_mask[bindx], cv2.DIST_L2, 5)[1:-1, 1:-1]
@@ -451,13 +448,13 @@ def get_next_points_removeall(pred, gt, points, points_focus, rois, click_indx, 
                 points[bindx, 2 * num_points - click_indx, 0] = float(coords[0])
                 points[bindx, 2 * num_points - click_indx, 1] = float(coords[1])
                 points[bindx, 2 * num_points - click_indx, 2] = float(click_indx)
-        
+
         x1, y1, x2, y2 = rois[bindx]
         point_focus = points[bindx]
-        hc,wc = y2-y1, x2-x1
-        ry,rx = h/hc, w/wc
-        bias = torch.tensor([y1,x1,0]).to(points.device)
-        ratio = torch.tensor([ry,rx,1]).to(points.device)
+        hc, wc = y2 - y1, x2 - x1
+        ry, rx = h / hc, w / wc
+        bias = torch.tensor([y1, x1, 0]).to(points.device)
+        ratio = torch.tensor([ry, rx, 1]).to(points.device)
         points_focus[bindx] = (point_focus - bias) * ratio
     return points, points_focus
 
@@ -468,9 +465,9 @@ def load_weights(model, path_to_weights):
 
     new_keys = set(new_state_dict.keys())
     old_keys = set(current_state_dict.keys())
-    print('='*10)
-    print(' unexpected: ', new_keys - old_keys )
-    print(' lacked: ', old_keys - new_keys )
-    print('='*10)
+    print('=' * 10)
+    print(' unexpected: ', new_keys - old_keys)
+    print(' lacked: ', old_keys - new_keys)
+    print('=' * 10)
     current_state_dict.update(new_state_dict)
     model.load_state_dict(current_state_dict, strict=False)

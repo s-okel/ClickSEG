@@ -65,6 +65,7 @@ class SBDEvaluationDataset(ISDataset):
         super(SBDEvaluationDataset, self).__init__(**kwargs)
         assert split in {'train', 'val'}
 
+        self.name = 'SBD_eval'
         self.dataset_path = Path(dataset_path)
         self.dataset_split = split
         self._images_path = self.dataset_path / 'img'

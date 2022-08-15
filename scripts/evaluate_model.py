@@ -113,6 +113,7 @@ def main():
 
     checkpoints_list, logs_path, logs_prefix = get_checkpoints_list_and_logs_path(args, cfg)
     print('checkpoint list: ', checkpoints_list)
+    print(f'vis path: {str(args.logs_path).replace("evaluation_logs", "vis")}')
     cfg.structure = args.structure
     logs_path.mkdir(parents=True, exist_ok=True)
 
@@ -136,12 +137,13 @@ def main():
                                       #zoom_in_params=None)
                                       zoom_in_params=zoomin_params)
 
-            #vis_callback = get_prediction_vis_callback(logs_path, dataset_name, args.thresh) if args.vis else None
+            # vis_callback = get_prediction_vis_callback(logs_path, dataset_name, args.thresh) if args.vis else None
             dataset_results = evaluate_dataset(dataset, predictor, pred_thr=args.thresh,
                                                max_iou_thr=args.target_iou,
                                                min_clicks=args.min_n_clicks,
                                                max_clicks=args.n_clicks,
                                                vis=args.vis,
+                                               vis_path=str(args.logs_path).replace("evaluation_logs", "vis")
                                                )
 
             row_name = args.mode if single_model_eval else checkpoint_path.stem

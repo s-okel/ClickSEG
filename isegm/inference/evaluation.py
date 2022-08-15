@@ -20,7 +20,10 @@ def evaluate_dataset(dataset, predictor, max_clicks, vis=True, vis_path='./exper
     all_ious = []
 
     if vis:
-        save_dir = vis_path + dataset.name + '/'
+        print(f"vis: {vis}")
+        print(f"vis_path = {vis_path}")
+        print(f"dataset.name = {dataset.name}")
+        save_dir = str(vis_path) + dataset.name + '/'
         # save_dir = '/home/admin/workspace/project/data/logs/'+ dataset.name + '/'
         if os.path.exists(save_dir):
             shutil.rmtree(save_dir)
@@ -97,7 +100,7 @@ def evaluate_sample(image, gt_mask, init_mask, predictor, max_iou_thr,
             if iou >= max_iou_thr and click_indx + 1 >= min_clicks:
                 break
 
-        if vis:
+        if vis and sample_id % 1000 == 0:
             if predictor.focus_roi is not None:
                 focus_roi = predictor.focus_roi
                 global_roi = predictor.global_roi

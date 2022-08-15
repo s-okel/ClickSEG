@@ -5,5 +5,4 @@
 #SBATCH --mail-type=fail,end
 #SBATCH --mail-user=sanne.okel@philips.com
 
-python train.py ./models/focalclick/segformerB3_S2_aorta.py --exp-name=segformerB3_S2_aorta
-python train.py ./models/focalclick/segformerB3_S2_arteria_mesenterica_superior.py --exp-name=segformerB3_S2_arteria_mesenterica_superior
+python train.py ./models/focalclick/hrnet18s_S2_sbd.py --exp-name=hrnet18s_S2_sbd
