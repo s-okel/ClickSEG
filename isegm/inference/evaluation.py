@@ -20,10 +20,7 @@ def evaluate_dataset(dataset, predictor, max_clicks, vis=True, vis_path='./exper
     all_ious = []
 
     if vis:
-        print(f"vis: {vis}")
-        print(f"vis_path = {vis_path}")
-        print(f"dataset.name = {dataset.name}")
-        save_dir = str(vis_path) + dataset.name + '/'
+        save_dir = str(vis_path) + "/" + dataset.name + '/'
         # save_dir = '/home/admin/workspace/project/data/logs/'+ dataset.name + '/'
         if os.path.exists(save_dir):
             shutil.rmtree(save_dir)
