@@ -4,10 +4,11 @@ from isegm.utils.misc import get_labels_with_sizes
 from isegm.data.transforms import remove_image_only_transforms
 from albumentations import ReplayCompose
 
+
 class DSample:
     def __init__(self, image, encoded_masks, objects=None,
                  objects_ids=None, ignore_ids=None, sample_id=None,
-                 init_mask = None):
+                 init_mask=None):
         self.image = image
         self.sample_id = sample_id
         self.init_mask = init_mask
@@ -41,18 +42,16 @@ class DSample:
         self._augmented = False
         self._soft_mask_aug = None
         self._original_data = self.image, self._encoded_masks, deepcopy(self._objects)
-    
 
     def augment(self, augmentator):
         self.reset_augmentation()
         aug_output = augmentator(image=self.image, mask=self._encoded_masks)
-        image, mask = aug_output['image'],aug_output['mask']
+        image, mask = aug_output['image'], aug_output['mask']
         self.image = image
         self._encoded_masks = mask
         self._compute_objects_areas()
         self.remove_small_objects(min_area=1)
         self._augmented = True
-    
 
     def reset_augmentation(self):
         if not self._augmented:
