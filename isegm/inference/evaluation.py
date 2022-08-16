@@ -165,15 +165,15 @@ def vis_result_base(image, pred_mask, instances_mask, init_mask, iou, num_clicks
         click_tuple = clicks_list[i]
 
         if click_tuple.is_positive:
-            color = (0, 0, 255)
-        else:
             color = (0, 255, 0)
+        else:
+            color = (0, 0, 255)
 
         coord = click_tuple.coords
         x, y = coord[1], coord[0]
         if x < 0 or y < 0:
             continue
-        cv2.circle(fusion_pred, (x, y), 4, color, -1)
+        cv2.circle(fusion_pred, (x, y), 2, color, -1)
         # cv2.putText(fusion_pred, str(i+1), (x-10, y-10),  cv2.FONT_HERSHEY_COMPLEX, 0.6 , color,1 )
 
     cv2.circle(fusion_pred, (last_x, last_y), 2, (255, 255, 255), -1)
@@ -243,7 +243,7 @@ def vis_result_refine(image, pred_mask, instances_mask, init_mask, iou, num_clic
     for i in range(len(clicks_list)):
         click_tuple = clicks_list[i]
 
-        if click_tuple.is_positive:
+        if not click_tuple.is_positive:
             color = (0, 0, 255)
         else:
             color = (0, 255, 0)
@@ -252,7 +252,7 @@ def vis_result_refine(image, pred_mask, instances_mask, init_mask, iou, num_clic
         x, y = coord[1], coord[0]
         if x < 0 or y < 0:
             continue
-        cv2.circle(fusion_pred, (x, y), 4, color, -1)
+        cv2.circle(fusion_pred, (x, y), 2, color, -1)
         # cv2.putText(fusion_pred, str(i+1), (x-10, y-10),  cv2.FONT_HERSHEY_COMPLEX, 0.6 , color,1 )
 
     cv2.circle(fusion_pred, (last_x, last_y), 2, (255, 255, 255), -1)

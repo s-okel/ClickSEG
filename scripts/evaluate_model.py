@@ -6,6 +6,7 @@ from pathlib import Path
 import cv2
 import torch
 import numpy as np
+import regex as re
 
 sys.path.insert(0, '.')
 from isegm.inference import utils
@@ -18,7 +19,7 @@ from isegm.inference.evaluation import evaluate_dataset
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('mode', choices=[ 'CDNet', 'Baseline', 'FocalClick', 'NoBRS', 'RGB-BRS', 'DistMap-BRS',
+    parser.add_argument('mode', choices=['CDNet', 'Baseline', 'FocalClick', 'NoBRS', 'RGB-BRS', 'DistMap-BRS',
                                          'f-BRS-A', 'f-BRS-B', 'f-BRS-C'],
                         help='')
 
@@ -29,7 +30,7 @@ def parse_args():
                                         'or an absolute path. The file extension can be omitted.')
 
     parser.add_argument('--model_dir', type=str, default='',
-                                   help='The path to the checkpoint.')
+                        help='The path to the checkpoint.')
 
     group_checkpoints.add_argument('--exp-path', type=str, default='',
                                    help='The relative path to the experiment with checkpoints.'
@@ -81,10 +82,10 @@ def parse_args():
                         help='Inference input size for the model')
 
     parser.add_argument('--target-crop-r', type=float, default=1.40,
-                                  help='Target Crop Expand Ratio')
-    
+                        help='Target Crop Expand Ratio')
+
     parser.add_argument('--focus-crop-r', type=float, default=1.40,
-                                  help='Focus Crop Expand Ratio')
+                        help='Focus Crop Expand Ratio')
 
     args = parser.parse_args()
     if args.cpu:
@@ -112,20 +113,17 @@ def main():
     args, cfg = parse_args()
 
     checkpoints_list, logs_path, logs_prefix = get_checkpoints_list_and_logs_path(args, cfg)
-    print('checkpoint list: ', checkpoints_list)
-    print(f'vis path: {str(args.logs_path).replace("evaluation_logs", "vis")}')
     cfg.structure = args.structure
     logs_path.mkdir(parents=True, exist_ok=True)
 
     single_model_eval = len(checkpoints_list) == 1
-    assert not args.iou_analysis if not single_model_eval else True, \
-        "Can't perform IoU analysis for multiple checkpoints"
-    print_header = single_model_eval
+    print_header = True
     for dataset_name in args.datasets.split(','):
         dataset = utils.get_dataset(dataset_name, cfg)
-        #print(dataset_name)
+        # print(dataset_name)
 
         for checkpoint_path in checkpoints_list:
+            logs_path_ch = logs_path / checkpoint_path.stem
             model = utils.load_is_model(checkpoint_path, args.device)
 
             predictor_params, zoomin_params = get_predictor_and_zoomin_params(args, dataset_name)
@@ -133,8 +131,8 @@ def main():
                                       infer_size=args.infer_size,
                                       prob_thresh=args.thresh,
                                       predictor_params=predictor_params,
-                                      focus_crop_r = args.focus_crop_r,
-                                      #zoom_in_params=None)
+                                      focus_crop_r=args.focus_crop_r,
+                                      # zoom_in_params=None)
                                       zoom_in_params=zoomin_params)
 
             # vis_callback = get_prediction_vis_callback(logs_path, dataset_name, args.thresh) if args.vis else None
@@ -143,20 +141,19 @@ def main():
                                                min_clicks=args.min_n_clicks,
                                                max_clicks=args.n_clicks,
                                                vis=args.vis,
-                                               vis_path=str(args.logs_path).replace("evaluation_logs", "vis")
+                                               vis_path=logs_path_ch / 'predictions_vis'
                                                )
 
             row_name = args.mode if single_model_eval else checkpoint_path.stem
             if args.iou_analysis:
-                save_iou_analysis_data(args, dataset_name, logs_path,
+                save_iou_analysis_data(args, dataset_name, logs_path_ch,
                                        logs_prefix, dataset_results,
                                        model_name=args.model_name)
 
-            save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_results,
+            save_results(args, row_name, dataset_name, logs_path_ch, logs_prefix, dataset_results,
                          save_ious=single_model_eval and args.save_ious,
                          single_model_eval=single_model_eval,
                          print_header=print_header)
-            print_header = False
 
 
 def get_predictor_and_zoomin_params(args, dataset_name):
@@ -203,13 +200,13 @@ def get_checkpoints_list_and_logs_path(args, cfg):
             if len(checkpoints_list) == 1:
                 logs_prefix = checkpoints_list[0].stem
             else:
-                logs_prefix = f'all_{checkpoint_prefix}'
+                logs_prefix = f''
         else:
-            logs_prefix = 'all_checkpoints'
+            logs_prefix = ''
 
-        logs_path = args.logs_path / exp_path.relative_to(cfg.EXPS_PATH)
+        logs_path = args.logs_path
     else:
-        #checkpoints_list = [Path(utils.find_checkpoint(cfg.INTERACTIVE_MODELS_PATH, args.checkpoint))]
+        # checkpoints_list = [Path(utils.find_checkpoint(cfg.INTERACTIVE_MODELS_PATH, args.checkpoint))]
         checkpoints_list = [Path(utils.find_checkpoint(args.model_dir, args.checkpoint))]
         logs_path = args.logs_path / 'others' / checkpoints_list[0].stem
 
@@ -219,7 +216,7 @@ def get_checkpoints_list_and_logs_path(args, cfg):
 def save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_results,
                  save_ious=False, print_header=True, single_model_eval=False):
     all_ious, elapsed_time = dataset_results
-    #print(all_ious)
+    # print(all_ious)
     mean_spc, mean_spi = utils.get_time_metrics(all_ious, elapsed_time)
 
     iou_thrs = np.arange(0.8, min(0.95, args.target_iou) + 0.001, 0.05).tolist()
@@ -252,7 +249,8 @@ def save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_r
     if save_ious:
         ious_path = logs_path / 'ious' / (logs_prefix if logs_prefix else '')
         ious_path.mkdir(parents=True, exist_ok=True)
-        with open(ious_path / f'{dataset_name}_{args.eval_mode}_{args.mode}_{args.n_clicks}_{args.structure}.pkl', 'wb') as fp:
+        with open(ious_path / f'{dataset_name}_{args.eval_mode}_{args.mode}_{args.n_clicks}_{args.structure}.pkl',
+                  'wb') as fp:
             pickle.dump(all_ious, fp)
 
     name_prefix = ''
@@ -282,7 +280,7 @@ def save_iou_analysis_data(args, dataset_name, logs_path, logs_prefix, dataset_r
     if model_name is None:
         model_name = str(logs_path.relative_to(args.logs_path)) + ':' + logs_prefix if logs_prefix else logs_path.stem
 
-    pkl_path = logs_path / f'plots/{name_prefix}{args.eval_mode}_{args.mode}_{args.n_clicks}_{args.structure}.pickle'
+    pkl_path = logs_path / f'{name_prefix}{args.eval_mode}_{args.mode}_{args.n_clicks}_{args.structure}.pickle'
     pkl_path.parent.mkdir(parents=True, exist_ok=True)
     with pkl_path.open('wb') as f:
         pickle.dump({
