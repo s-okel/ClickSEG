@@ -64,6 +64,8 @@ class ISTrainer(object):
 
         self.epoch_train_loss = []
         self.epoch_val_loss = []
+        self.epoch_val_dice = []
+        self.epoch_val_iou = []
 
         self.checkpoint_interval = checkpoint_interval
         self.image_dump_interval = image_dump_interval
@@ -129,7 +131,7 @@ class ISTrainer(object):
         for epoch in range(start_epoch, num_epochs):
             self.training(epoch)
             if validation:
-               self.validation(epoch)
+                self.validation(epoch)
 
     def training(self, epoch):
         if self.sw is None and self.is_master:
@@ -245,8 +247,18 @@ class ISTrainer(object):
                                    global_step=epoch, disable_avg=True)
 
             for metric in self.val_metrics:
-                self.sw.add_scalar(tag=f'{log_prefix}Metrics/{metric.name}', value=metric.get_epoch_value(),
+                val_metric = metric.get_epoch_value()
+                self.sw.add_scalar(tag=f'{log_prefix}Metrics/{metric.name}', value=val_metric,
                                    global_step=epoch, disable_avg=True)
+                print(f"Metric name: {metric.name}")
+                print(f"Metric get epoch value: {val_metric}")
+
+                if metric.name == 'DiceScore':
+                    self.epoch_val_dice.append(val_metric)
+                elif metric.name == "AdaptiveIoU":
+                    self.epoch_val_iou.append(val_metric)
+                else:
+                    print("Metric not saved")
 
         if (epoch + 1) % 10 == 0:
             save_checkpoint(self.net, self.cfg.CHECKPOINTS_PATH, prefix=self.task_prefix, epoch=None,
@@ -255,6 +267,10 @@ class ISTrainer(object):
         self.epoch_val_loss.append(val_loss / len(tbar))
         with open("./" + str(self.cfg.CHECKPOINTS_PATH) + r"/val_losses.txt", "w") as f:
             f.write(str(self.epoch_val_loss))
+        with open("./" + str(self.cfg.CHECKPOINTS_PATH) + r"/val_dice.txt", "w") as f:
+            f.write(str(self.epoch_val_dice))
+        with open("./" + str(self.cfg.CHECKPOINTS_PATH) + r"/val_iou.txt", "w") as f:
+            f.write(str(self.epoch_val_iou))
 
     def batch_forward(self, batch_data, validation=False):
         metrics = self.val_metrics if validation else self.train_metrics

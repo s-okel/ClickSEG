@@ -83,6 +83,46 @@ class AdaptiveIoU(TrainMetric):
         return self._iou_thresh
 
 
+class DiceScore(TrainMetric):
+    def __init__(self, pred_output='instances', gt_output='instances', from_logits=True):
+        super().__init__(pred_outputs=(pred_output,), gt_outputs=(gt_output,))
+        self._from_logits = from_logits
+        self._epoch_dice_sum = 0.0
+        self._epoch_batch_count = 0
+
+    def update(self, pred, gt):
+        gt_mask = (gt > 0.5).detach().cpu().numpy()
+        if self._from_logits:
+            pred = torch.sigmoid(pred)
+        pred_mask = (pred > 0.5).detach().cpu().numpy()
+
+        gt_mask_area = np.sum(gt_mask)
+        pred_mask_area = np.sum(pred_mask)
+        if np.all(gt_mask_area == 0):
+            return
+
+        intersection = np.sum(gt_mask * pred_mask)
+        union = gt_mask_area + pred_mask_area
+
+        dice = (2 * intersection) / union
+
+        self._epoch_dice_sum += dice
+        self._epoch_batch_count += 1
+
+    def get_epoch_value(self):
+        if self._epoch_batch_count > 0:
+            return self._epoch_dice_sum / self._epoch_batch_count
+        else:
+            return 0.0
+
+    def reset_epoch_stats(self):
+        self._epoch_dice_sum = 0.0
+        self._epoch_batch_count = 0
+
+    def log_states(self, sw, tag_prefix, global_step):
+        pass
+
+
 def _compute_iou(pred_mask, gt_mask, ignore_mask=None, keep_ignore=False):
     if ignore_mask is not None:
         pred_mask = torch.where(ignore_mask, torch.zeros_like(pred_mask), pred_mask)
