@@ -1,11 +1,14 @@
 from isegm.utils.exp_imports.default import *
-MODEL_NAME = 'cdnet_res34_panc'
 from isegm.data.datasets.ade20k import ADE20kDataset
 from isegm.data.datasets.saliency import SaliencyDataset
-from isegm.data.compose import ComposeDataset,ProportionalComposeDataset
+from isegm.data.compose import ComposeDataset, ProportionalComposeDataset
 import torch.nn as nn
 from isegm.engine.cdnet_trainer import ISTrainer
 from isegm.data.aligned_augmentation import AlignedAugmentator
+
+label = "gastroduodenalis"
+MODEL_NAME = f'cdnet_res34_{label}'
+
 
 def main(cfg):
     model, model_cfg = init_model(cfg)
@@ -14,10 +17,10 @@ def main(cfg):
 
 def init_model(cfg):
     model_cfg = edict()
-    model_cfg.crop_size = (128, 128)
+    model_cfg.crop_size = (96, 96)
     model_cfg.num_max_points = 24
     model = DeeplabModel(backbone='resnet34', deeplab_ch=128, aspp_dropout=0.20, use_leaky_relu=True,
-                         use_rgb_conv=False, use_disks=True, norm_radius=5,  with_prev_mask=True)
+                         use_rgb_conv=False, use_disks=True, norm_radius=5, with_prev_mask=True)
     model.to(cfg.device)
     model.apply(initializer.XavierGluon(rnd_type='gaussian', magnitude=2.0))
     model.feature_extractor.load_pretrained_weights()
@@ -32,14 +35,14 @@ def train(model, cfg, model_cfg):
     loss_cfg = edict()
     loss_cfg.instance_loss = NormalizedFocalLossSigmoid(alpha=0.5, gamma=2)
     loss_cfg.instance_loss_weight = 1
-    loss_cfg.fdm_instances_loss = NormalizedFocalLossSigmoid(alpha=0.5, gamma=2, from_sigmoid=True) #SigmoidBinaryCrossEntropyLoss(from_sigmoid=True)
+    loss_cfg.fdm_instances_loss = NormalizedFocalLossSigmoid(alpha=0.5, gamma=2, from_sigmoid=True)  # SigmoidBinaryCrossEntropyLoss(from_sigmoid=True)
     loss_cfg.fdm_instances_loss_weight = 0.4
     loss_cfg.diversity_loss = DiversityLoss()
     loss_cfg.diversity_loss_weight = 1
 
-    train_augmentator = AlignedAugmentator(ratio=[0.3,1.3], target_size=crop_size, flip=True, 
-                                            distribution='Gaussian', gs_center = 0.8, gs_sd = 0.4
-                                    )
+    train_augmentator = AlignedAugmentator(ratio=[0.3, 1.3], target_size=crop_size, flip=True,
+                                           distribution='Gaussian', gs_center=0.8, gs_sd=0.4
+                                           )
 
     val_augmentator = Compose([
         UniformRandomResize(scale_range=(0.75, 1.25)),
@@ -59,6 +62,7 @@ def train(model, cfg, model_cfg):
         min_object_area=80,
         keep_background_prob=0.01,
         points_sampler=points_sampler,
+        label=label
     )
 
     valset = PancDataset(
@@ -66,7 +70,8 @@ def train(model, cfg, model_cfg):
         augmentator=val_augmentator,
         min_object_area=80,
         points_sampler=points_sampler,
-        epoch_len=500
+        epoch_len=500,
+        label=label
     )
 
     optimizer_params = {
@@ -85,4 +90,4 @@ def train(model, cfg, model_cfg):
                         metrics=[AdaptiveIoU()],
                         max_interactive_points=model_cfg.num_max_points,
                         max_num_next_clicks=0)
-    trainer.run(num_epochs=120)
+    trainer.run(num_epochs=220)
