@@ -102,9 +102,9 @@ class DiceScore(TrainMetric):
             return
 
         intersection = np.sum(gt_mask * pred_mask)
-        union = gt_mask_area + pred_mask_area
+        sum_area = gt_mask_area + pred_mask_area
 
-        dice = (2 * intersection) / union
+        dice = (2 * intersection) / sum_area
 
         self._epoch_dice_sum += dice
         self._epoch_batch_count += 1

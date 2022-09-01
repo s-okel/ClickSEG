@@ -363,7 +363,7 @@ if __name__ == "__main__":
     if model_type == 'segformer':
         experiments_path = "./experiments/focalclick/"
         structures = {'aorta': {'try': '000', 'epoch': 49, 'avg_mask': 3000},
-                      'arteria_mesenterica_superior': {'try': '000', 'epoch': 39, 'avg_mask': 252},  # retest on 39...
+                      'arteria_mesenterica_superior': {'try': '000', 'epoch': 39, 'avg_mask': 252},
                       'common_bile_duct': {'try': '000', 'epoch': 169, 'avg_mask': 501},
                       'gastroduodenalis': {'try': '000', 'epoch': 69, 'avg_mask': 61},
                       'pancreas': {'try': '000', 'epoch': 49, 'avg_mask': 979},

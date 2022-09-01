@@ -19,6 +19,7 @@ from .optimizer import get_optimizer
 from torch.cuda.amp import autocast as autocast, GradScaler
 scaler = GradScaler()
 
+
 class ISTrainer(object):
     def __init__(self, model, cfg, model_cfg, loss_cfg,
                  trainset, valset,

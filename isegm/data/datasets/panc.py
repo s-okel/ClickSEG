@@ -16,6 +16,7 @@ class PancDataset(ISDataset):
 
         self.data = torch.load(data_path + f"{label}_{split}_slices.pt")
         self.dataset_samples = range(len(self.data[0]))
+        # self.dataset_samples = range(5)  # for testing purposes
 
     def get_sample(self, index) -> DSample:
         img = np.array(self.data[0, index]).astype("uint8")
