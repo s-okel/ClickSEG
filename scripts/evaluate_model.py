@@ -123,6 +123,7 @@ def main():
         # print(dataset_name)
 
         for checkpoint_path in checkpoints_list:
+            print(f"checkpoint path: {checkpoint_path}\n")
             logs_path_ch = logs_path / checkpoint_path.stem
             model = utils.load_is_model(checkpoint_path, args.device)
 
@@ -137,7 +138,7 @@ def main():
 
             # vis_callback = get_prediction_vis_callback(logs_path, dataset_name, args.thresh) if args.vis else None
             dataset_results = evaluate_dataset(dataset, predictor, pred_thr=args.thresh,
-                                               max_iou_thr=args.target_iou,
+                                               max_metric_thr=args.target_iou,
                                                min_clicks=args.min_n_clicks,
                                                max_clicks=args.n_clicks,
                                                vis=args.vis,
@@ -215,25 +216,34 @@ def get_checkpoints_list_and_logs_path(args, cfg):
 
 def save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_results,
                  save_ious=False, print_header=True, single_model_eval=False):
-    all_ious, elapsed_time = dataset_results
+    all_ious, all_dices, elapsed_time = dataset_results
     # print(all_ious)
     mean_spc, mean_spi = utils.get_time_metrics(all_ious, elapsed_time)
 
     iou_thrs = np.arange(0.8, min(0.95, args.target_iou) + 0.001, 0.05).tolist()
     noc_list, over_max_list = utils.compute_noc_metric(all_ious, iou_thrs=iou_thrs, max_clicks=args.n_clicks)
+    noc_dice_list, over_max_dice_list = utils.compute_noc_metric(all_dices, iou_thrs=iou_thrs, max_clicks=args.n_clicks)
 
     row_name = 'last' if row_name == 'last_checkpoint' else row_name
     model_name = str(logs_path.relative_to(args.logs_path)) + ':' + logs_prefix if logs_prefix else logs_path.stem
     header, table_row = utils.get_results_table(noc_list, over_max_list, row_name, dataset_name,
-                                                mean_spc, elapsed_time, args.n_clicks,
+                                                mean_spc, elapsed_time, 'iou', args.n_clicks,
                                                 model_name=model_name)
+    header_dice, table_row_dice = utils.get_results_table(noc_dice_list, over_max_dice_list, row_name, dataset_name,
+                                                          mean_spc, elapsed_time, 'dice', args.n_clicks,
+                                                          model_name=model_name)
 
     if args.print_ious:
         min_num_clicks = min(len(x) for x in all_ious)
+        min_num_dice_clicks = min(len(x) for x in all_dices)
         mean_ious = np.array([x[:min_num_clicks] for x in all_ious]).mean(axis=0)
+        mean_dices = np.array([x[:min_num_dice_clicks] for x in all_dices]).mean(axis=0)
         miou_str = ' '.join([f'mIoU@{click_id}={mean_ious[click_id - 1]:.2%};'
                              for click_id in [1, 2, 3, 5, 10, 20] if click_id <= min_num_clicks])
-        table_row += '; ' + miou_str
+        mdices_str = ' '.join([f'mDICE@{click_id}={mean_dices[click_id - 1]:.2%};'
+                               for click_id in [1, 2, 3, 5, 10, 20] if click_id <= min_num_dice_clicks])
+
+        table_row += '\n' + table_row_dice + '\n' + miou_str + '\n' + mdices_str
     else:
         target_iou_int = int(args.target_iou * 100)
         if target_iou_int not in [80, 85, 90]:
@@ -249,9 +259,12 @@ def save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_r
     if save_ious:
         ious_path = logs_path / 'ious' / (logs_prefix if logs_prefix else '')
         ious_path.mkdir(parents=True, exist_ok=True)
-        with open(ious_path / f'{dataset_name}_{args.eval_mode}_{args.mode}_{args.n_clicks}_{args.structure}.pkl',
+        with open(ious_path / f'{dataset_name}_{args.eval_mode}_{args.mode}_{args.n_clicks}_{args.structure}_iou.pkl',
                   'wb') as fp:
             pickle.dump(all_ious, fp)
+        with open(ious_path / f'{dataset_name}_{args.eval_mode}_{args.mode}_{args.n_clicks}_{args.structure}_dice.pkl',
+                  'wb') as fp:
+            pickle.dump(all_dices, fp)
 
     name_prefix = ''
     if logs_prefix:
@@ -271,7 +284,7 @@ def save_results(args, row_name, dataset_name, logs_path, logs_prefix, dataset_r
 
 
 def save_iou_analysis_data(args, dataset_name, logs_path, logs_prefix, dataset_results, model_name=None):
-    all_ious, _ = dataset_results
+    all_ious, all_dices, _ = dataset_results
 
     name_prefix = ''
     if logs_prefix:
@@ -286,7 +299,8 @@ def save_iou_analysis_data(args, dataset_name, logs_path, logs_prefix, dataset_r
         pickle.dump({
             'dataset_name': dataset_name,
             'model_name': f'{model_name}_{args.mode}',
-            'all_ious': all_ious
+            'all_ious': all_ious,
+            'all_dices': all_dices
         }, f)
 
 
