@@ -113,6 +113,7 @@ def main():
     args, cfg = parse_args()
 
     checkpoints_list, logs_path, logs_prefix = get_checkpoints_list_and_logs_path(args, cfg)
+    print(f"checkpoints: {checkpoints_list}")
     cfg.structure = args.structure
     logs_path.mkdir(parents=True, exist_ok=True)
 
@@ -191,10 +192,9 @@ def get_checkpoints_list_and_logs_path(args, cfg):
             rel_exp_path, checkpoint_prefix = rel_exp_path.split(':')
 
         exp_path_prefix = cfg.EXPS_PATH / rel_exp_path
-        candidates = list(exp_path_prefix.parent.glob(exp_path_prefix.stem + '*'))
-        assert len(candidates) == 1, "Invalid experiment path."
-        exp_path = candidates[0]
-        checkpoints_list = sorted((exp_path / 'checkpoints').glob(checkpoint_prefix + '*.pth'), reverse=True)
+        print(f"exp path prefix: {exp_path_prefix}")
+        candidates = list(exp_path_prefix.glob('*.pth'))
+        checkpoints_list = sorted(candidates, reverse=True)
         assert len(checkpoints_list) > 0, "Couldn't find any checkpoints."
 
         if checkpoint_prefix:
