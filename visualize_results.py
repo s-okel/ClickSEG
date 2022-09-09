@@ -1,3 +1,4 @@
+import json
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -5,7 +6,10 @@ import os
 import pandas as pd
 import pickle
 import regex as re
+import seaborn as sns
 from termcolor import colored
+
+colors = ['#332288', '#88CCEE', '#117733', "#e28743", '#DDCC77', '#44AA99', '#CC6677', '#882255', '#AA4499']
 
 
 def get_noc(iou_arr, iou_thr, max_clicks):
@@ -37,10 +41,10 @@ def load_data_to_plot(data_dict):
         model_path = experiments_path + model + "/"
         for model_try in os.listdir(model_path):
             model_try_path = model_path + model_try + "/"
-            evaluation_path = model_try_path + "evaluation_logs/"
+            evaluation_path = model_try_path + "evaluation_logs/test_set/others/"
             if os.path.exists(evaluation_path):
                 for epoch in os.listdir(evaluation_path):
-                    plots_path = evaluation_path + epoch + "/"
+                    plots_path = evaluation_path + epoch + "/" + epoch + "/"
                     if os.path.exists(plots_path):
                         for file in os.listdir(plots_path):
                             for k in data_dict:
@@ -49,6 +53,8 @@ def load_data_to_plot(data_dict):
                                             and 'epoch-' + str(data_dict[k]['epoch']) in plots_path \
                                             and k in plots_path and '1' + str(data_dict[k]['epoch']) not in plots_path \
                                             and '2' + str(data_dict[k]['epoch']) not in plots_path:
+                                        print(file)
+                                        '''
                                         print(colored(f"Key: {k}", "green"))
                                         print(f"Loading {plots_path + file}")
                                         with open(plots_path + file, "rb") as f:
@@ -57,69 +63,63 @@ def load_data_to_plot(data_dict):
                                             label = label.replace("Arteria mesenterica superior",
                                                                   "Superior mesenteric artery")
                                             iou_dict[label] = np.array(pickle.load(f)['all_ious'])
+                                        '''
 
     return iou_dict
 
 
-def process_results_txt():
-    # finds all epoch evaluations and saves them in different formats
-    results = {}
-    txt_file = "epoch_evaluations/epoch_evaluations.txt"
+def boundary_progression_plot(structures_dict, lw=0.5, font_size=12):
+    boundary_hu_per_structure = {}
+    selected_colors = colors[0:len(structures_dict)]
 
-    if os.path.exists(txt_file):
-        os.remove(txt_file)
-    for model in os.listdir(experiments_path):
-        if "hrnet" in model:
-            continue
-        model_path = experiments_path + model + "/"
-        print(colored(f"Model name: {model}", "green"))
-        with open(txt_file, "a") as write_file:
-            write_file.write(f"Model name: {model}\n")
-        results[model] = {}
-        for try_folder in os.listdir(model_path):
-            results_per_try = []
-            epochs_per_try = []
-            try_nr = try_folder.split("_")[0]
-            print(colored(f"\tTry: {try_nr}", "red"))
-            with open(txt_file, "a") as write_file:
-                write_file.write(f"\tTry: {try_nr}\n")
-            results[model][try_nr] = {}
-            epochs_path = model_path + try_folder + "/evaluation_logs/"
-            if os.path.exists(epochs_path):
-                for epoch in os.listdir(epochs_path):
-                    epoch_path = epochs_path + epoch + "/"
-                    epoch = epoch.split("-")[1]
-                    print(colored(f"\t\tEpoch: {epoch}", "yellow"))
-                    with open(txt_file, "a") as write_file:
-                        write_file.write(f"\t\tEpoch: {epoch}\n")
-                    results[model][try_nr][epoch] = {}
-                    for file in os.listdir(epoch_path):
-                        if ".txt" in file:
-                            with open(epoch_path + file, "r") as f:
-                                text = f.read()
-                                values = re.findall(r"([0-9]{0,2}\.[0-9]{2})(?!\|)(?![0-9])", text)
+    for key in structures_dict:
+        boundary_hu_per_structure[key] = []
 
-                                # just print to terminal
-                                print(f"\t\t{values}")
+    with open('structure_boundary_hu.json', 'r') as f:
+        data = json.load(f)
 
-                                # save in comprehensive dict
-                                results[model][try_nr][epoch] = values
+    for key in data:
+        print(key)
+        for structure in data[key]:
+            boundary_hu_per_structure[structure].append(data[key][structure][0])
 
-                                # write to file
-                                with open(txt_file, "a") as write_file:
-                                    write_file.write(f"\t\t{values}\n")
+    print(np.shape(np.array(boundary_hu_per_structure['aorta'])))
 
-                                # add to list/array
-                                results_per_try.append([float(item) for item in values])
-                                epochs_per_try.append(float(epoch))
+    f, ax = plt.subplots()
+    ax.vlines(9, -250, 250, linewidth=lw, linestyles='dashed', color='k')
+    for structure, color in zip(boundary_hu_per_structure, selected_colors):
+        a = np.array(boundary_hu_per_structure[structure])
+        a[a == 40000] = np.nan
+        ax.plot(np.nanmean(a, axis=0) - np.nanmean(a, axis=0)[9], linewidth=lw,
+                label=improve_label(structure, abbreviations=True), color=color)
 
-            results_per_try = np.array(results_per_try)
-            epochs_per_try = np.array(epochs_per_try)[:, None]
+    plt.ylim([-200, 110])
+    plt.xlim([0, 19])
+    plt.xticks([0, 4, 9, 14, 19], ['', '-5', '0', '5', '10'])
+    plt.xlabel('Distance from boundary [pixels]', fontsize=font_size)
+    plt.ylabel('Relative intensity w.r.t. the boundary [HU]', fontsize=font_size)
+    plt.legend(prop={'size': font_size})
+    plt.grid(visible=True, which='both', axis='both')
+    plt.show()
 
-            results_per_try = results_per_try.reshape((-1, 9))
 
-            df = pd.DataFrame(np.concatenate((epochs_per_try, results_per_try), axis=1))
-            df.to_excel(f"epoch_evaluations/model_{model}_try_{try_nr}.xlsx", index=False, header=False)
+def in_out_plot(structures_dict, save=False, font_size=12):
+    strcts = [key for key in structures_dict]
+    print("Loading pickle...")
+    df = pd.read_pickle('in_out_df.pkl')
+    print("Loaded pickle.")
+
+    boxplot = sns.boxplot(data=df, x='structure', y='values', hue='in', palette=["#e28743", "#eab676"], showfliers=False)
+    boxplot.set_xlabel('Structure', fontsize=font_size)
+    boxplot.set_ylabel('Intensity [HU]', fontsize=font_size)
+    boxplot.set_xticklabels([improve_label(structure, True) for structure in strcts])
+
+    handles, _ = boxplot.get_legend_handles_labels()
+    boxplot.legend(handles, ['Inside', 'Outside'])
+    if save:
+        plt.savefig(f"epoch_evaluations/in_out_boxplot.pdf", dpi=300)
+    else:
+        plt.show()
 
 
 def single_boxplot(data_dict, label, n_clicks, save=False, font_size=12):
@@ -133,7 +133,7 @@ def single_boxplot(data_dict, label, n_clicks, save=False, font_size=12):
     ax.spines.right.set_visible(False)
     ax.spines.top.set_visible(False)
     if save:
-        plt.savefig(f"epoch_evaluations/{label}_single_boxplot.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_{label}_single_boxplot.pdf", dpi=300)
     else:
         plt.show()
 
@@ -155,7 +155,7 @@ def single_std_plot(data_dict, label, n_clicks, lw=0.5, save=False, font_size=12
     plt.ylim([0, 1])
     plt.xlim([1, n_clicks])
     if save:
-        plt.savefig(f"epoch_evaluations/{label}_individual_std.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_{label}_individual_std.pdf", dpi=300)
     else:
         plt.show()
 
@@ -180,14 +180,13 @@ def single_noc_histogram(data_dict, label, n_clicks, noc_thr, lw=0.5, save=False
     plt.xlabel("Amount of clicks", fontsize=font_size)
     plt.xlim([0, n_clicks + 1])
     if save:
-        plt.savefig(f"epoch_evaluations/{label}_individual_histogram.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_{label}_individual_histogram.pdf", dpi=300)
     else:
         plt.show()
 
 
 def combined_miou_plot(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
     f, ax = plt.subplots()
-    colors = ['#332288', '#88CCEE', '#117733', "#e28743", '#DDCC77', '#44AA99', '#CC6677', '#882255', '#AA4499']
     # colors = ['#8c510a','#d8b365','#f6e8c3','#c7eae5','#5ab4ac','#01665e']
     selected_colors = colors[0:len(data_dict)]
     for k, color in zip(data_dict, selected_colors):
@@ -201,14 +200,13 @@ def combined_miou_plot(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
     plt.legend(prop={'size': font_size})
     plt.grid(visible=True, which='both', axis='both')
     if save:
-        plt.savefig("epoch_evaluations/mIoU_combined.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_mIoU_combined.pdf", dpi=300)
     else:
         plt.show()
 
 
 def combined_noc_histogram(data_dict, n_clicks, noc_thr, lw=0.5, save=False, font_size=12):
     f, ax = plt.subplots()
-    colors = ['#332288', '#88CCEE', '#117733', "#e28743", '#DDCC77', '#44AA99', '#CC6677', '#882255', '#AA4499']
     selected_colors = colors[0:len(data_dict)]
 
     for k, color in zip(data_dict, selected_colors):
@@ -228,7 +226,7 @@ def combined_noc_histogram(data_dict, n_clicks, noc_thr, lw=0.5, save=False, fon
     plt.ylabel("Density", fontsize=font_size)
     plt.legend()
     if save:
-        plt.savefig("epoch_evaluations/nocs_combined.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_nocs_combined.pdf", dpi=300)
     else:
         plt.show()
 
@@ -267,13 +265,12 @@ def plot_avg_mask_influence(data_dict, structures_dict, noc_thr, lw=0.5, save=Fa
     plt.xlim([0, 3500])
     plt.grid(visible=True, which='both', axis='both')
     if save:
-        plt.savefig("epoch_evaluations/noc_vs_mask_size.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_noc_vs_mask_size.pdf", dpi=300)
     else:
         plt.show()
 
 
 def combined_delta_relative(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
-    colors = ['#332288', '#88CCEE', '#117733', "#e28743", '#DDCC77', '#44AA99', '#CC6677', '#882255', '#AA4499']
     selected_colors = colors[0:len(data_dict)]
 
     f, ax = plt.subplots()
@@ -290,13 +287,12 @@ def combined_delta_relative(data_dict, n_clicks, lw=0.5, save=False, font_size=1
     plt.legend(prop={'size': font_size})
     plt.grid(visible=True, which='both', axis='both')
     if save:
-        plt.savefig("epoch_evaluations/delta_relative.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_delta_relative.pdf", dpi=300)
     else:
         plt.show()
 
 
 def combined_delta_absolute(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
-    colors = ['#332288', '#88CCEE', '#117733', "#e28743", '#DDCC77', '#44AA99', '#CC6677', '#882255', '#AA4499']
     selected_colors = colors[0:len(data_dict)]
 
     f, ax = plt.subplots()
@@ -311,7 +307,7 @@ def combined_delta_absolute(data_dict, n_clicks, lw=0.5, save=False, font_size=1
     plt.xlim([1, n_clicks - 1])
     plt.legend()
     if save:
-        plt.savefig("epoch_evaluations/delta_absolute.pdf", dpi=300)
+        plt.savefig(f"epoch_evaluations/{model_type}_delta_absolute.pdf", dpi=300)
     else:
         plt.show()
 
@@ -378,17 +374,20 @@ if __name__ == "__main__":
                       'pancreas': {'try': '000', 'epoch': 19, 'avg_mask': 979},
                       'pancreatic_duct': {'try': '000', 'epoch': 9, 'avg_mask': 162},
                       'tumour': {'try': '000', 'epoch': 19, 'avg_mask': 75}}
-    create_latex_table(structures)
+    else:
+        raise ValueError(f"Expected model_type cdnet or segformer, not {model_type}")
 
-    """
-    process_results_txt()
+    # boundary_progression_plot(structures, lw=linew)
+    # in_out_plot(structures, save=True, font_size=12)  # only do this one if you're really sure, since it takes ages
+
+    # create_latex_table(structures)
+    
     data = load_data_to_plot(structures)
 
-    plot_avg_mask_influence(data, structures, noc_thr=0.8, save=True, font_size=fs)
-    single_noc_histogram(data, 'Pancreas', n_clicks=50, noc_thr=0.8, lw=0.5, save=True, font_size=fs)
-    combined_miou_plot(data, n_clicks=20, lw=linew, font_size=fs, save=True)
-    combined_noc_histogram(data, n_clicks=50, noc_thr=0.8)
-    combined_noc_histogram(data, n_clicks=30, noc_thr=0.8)
+    # plot_avg_mask_influence(data, structures, noc_thr=0.8, save=True, font_size=fs)
+    # single_noc_histogram(data, 'Pancreas', n_clicks=50, noc_thr=0.8, lw=0.5, save=True, font_size=fs)
+    # combined_miou_plot(data, n_clicks=20, lw=linew, font_size=fs, save=True)
+    # combined_noc_histogram(data, n_clicks=50, noc_thr=0.8)
+    # combined_noc_histogram(data, n_clicks=30, noc_thr=0.8)
     # combined_delta_absolute(data, n_clicks=50)
-    combined_delta_absolute(data, n_clicks=20, save=False)
-    """
+    # combined_delta_absolute(data, n_clicks=20, save=False)
