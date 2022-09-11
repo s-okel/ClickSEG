@@ -8,8 +8,7 @@ import pickle
 import regex as re
 import seaborn as sns
 from termcolor import colored
-
-colors = ['#332288', '#88CCEE', '#117733', "#e28743", '#DDCC77', '#44AA99', '#CC6677', '#882255', '#AA4499']
+from isegm.inference.utils import compute_noc_metric
 
 
 def get_noc(iou_arr, iou_thr, max_clicks):
@@ -32,19 +31,23 @@ def improve_label(og_label, abbreviations):
     return new_label
 
 
-def load_data_to_plot(data_dict):
+def load_data_to_plot(data_dict, exp_path, model_type, ious=True):
     iou_dict = {}
+    print(colored(f"{model_type}", 'yellow'))
 
-    for model in os.listdir(experiments_path):
+    for model in os.listdir(exp_path):
         if model_type not in model:
             continue
-        model_path = experiments_path + model + "/"
+        model_path = os.path.join(exp_path, model)
         for model_try in os.listdir(model_path):
-            model_try_path = model_path + model_try + "/"
-            evaluation_path = model_try_path + "evaluation_logs/test_set/others/"
+            model_try_path = os.path.join(model_path, model_try)
+            evaluation_path = os.path.join(model_try_path, "evaluation_logs/test_set/others/")
             if os.path.exists(evaluation_path):
                 for epoch in os.listdir(evaluation_path):
-                    plots_path = evaluation_path + epoch + "/" + epoch + "/"
+                    if model_type == 'hrnet':
+                        plots_path = os.path.join(evaluation_path, epoch, "plots")
+                    else:
+                        plots_path = os.path.join(evaluation_path, epoch, epoch)
                     if os.path.exists(plots_path):
                         for file in os.listdir(plots_path):
                             for k in data_dict:
@@ -53,17 +56,13 @@ def load_data_to_plot(data_dict):
                                             and 'epoch-' + str(data_dict[k]['epoch']) in plots_path \
                                             and k in plots_path and '1' + str(data_dict[k]['epoch']) not in plots_path \
                                             and '2' + str(data_dict[k]['epoch']) not in plots_path:
-                                        print(file)
-                                        '''
-                                        print(colored(f"Key: {k}", "green"))
-                                        print(f"Loading {plots_path + file}")
-                                        with open(plots_path + file, "rb") as f:
-                                            label = k.replace("_", " ")
-                                            label = label.capitalize()
-                                            label = label.replace("Arteria mesenterica superior",
-                                                                  "Superior mesenteric artery")
-                                            iou_dict[label] = np.array(pickle.load(f)['all_ious'])
-                                        '''
+                                        print('\t' + colored(f"Key: {k}", "green"))
+                                        print(f"\tLoading {os.path.join(plots_path, file)}")
+                                        with open(os.path.join(plots_path, file), "rb") as f:
+                                            if ious:
+                                                iou_dict[k] = np.array(pickle.load(f)['all_ious'])
+                                            else:
+                                                iou_dict[k] = np.array(pickle.load(f)['all_dices'])
 
     return iou_dict
 
@@ -109,7 +108,8 @@ def in_out_plot(structures_dict, save=False, font_size=12):
     df = pd.read_pickle('in_out_df.pkl')
     print("Loaded pickle.")
 
-    boxplot = sns.boxplot(data=df, x='structure', y='values', hue='in', palette=["#e28743", "#eab676"], showfliers=False)
+    boxplot = sns.boxplot(data=df, x='structure', y='values', hue='in', palette=["#e28743", "#eab676"],
+                          showfliers=False)
     boxplot.set_xlabel('Structure', fontsize=font_size)
     boxplot.set_ylabel('Intensity [HU]', fontsize=font_size)
     boxplot.set_xticklabels([improve_label(structure, True) for structure in strcts])
@@ -122,7 +122,7 @@ def in_out_plot(structures_dict, save=False, font_size=12):
         plt.show()
 
 
-def single_boxplot(data_dict, label, n_clicks, save=False, font_size=12):
+def single_boxplot(data_dict, model_type, label, n_clicks, save=False, font_size=12):
     ious_array = data_dict[label][:, :n_clicks]
 
     f, ax = plt.subplots()
@@ -138,7 +138,7 @@ def single_boxplot(data_dict, label, n_clicks, save=False, font_size=12):
         plt.show()
 
 
-def single_std_plot(data_dict, label, n_clicks, lw=0.5, save=False, font_size=12):
+def single_std_plot(data_dict, model_type, label, n_clicks, lw=0.5, save=False, font_size=12):
     ious_array = data_dict[label][:, :n_clicks]
     mean = np.mean(ious_array, axis=0)
     std = np.std(ious_array, axis=0)
@@ -160,7 +160,7 @@ def single_std_plot(data_dict, label, n_clicks, lw=0.5, save=False, font_size=12
         plt.show()
 
 
-def single_noc_histogram(data_dict, label, n_clicks, noc_thr, lw=0.5, save=False, font_size=12):
+def single_noc_histogram(data_dict, model_type, label, n_clicks, noc_thr, lw=0.5, save=False, font_size=12):
     ious_array = data_dict[label][:, :n_clicks]
     nocs = []
 
@@ -177,7 +177,8 @@ def single_noc_histogram(data_dict, label, n_clicks, noc_thr, lw=0.5, save=False
     ax.hist(nocs, bins=n_clicks, histtype='step', color="#e28743", lw=lw)
     ax.spines.right.set_visible(False)
     ax.spines.top.set_visible(False)
-    plt.xlabel("Amount of clicks", fontsize=font_size)
+    plt.xlabel(f"NoC@{int(noc_thr * 100)}", fontsize=font_size)
+    plt.ylabel("Frequency")
     plt.xlim([0, n_clicks + 1])
     if save:
         plt.savefig(f"epoch_evaluations/{model_type}_{label}_individual_histogram.pdf", dpi=300)
@@ -185,7 +186,34 @@ def single_noc_histogram(data_dict, label, n_clicks, noc_thr, lw=0.5, save=False
         plt.show()
 
 
-def combined_miou_plot(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
+def all_models_noc_histogram(label, n_clicks, noc_thr, save):
+    selected_colors = colors[:len(data_all_models)]
+
+    f, ax = plt.subplots()
+    for data_dict, color in zip(data_all_models, selected_colors):
+        ious_array = data_dict[label][:, :n_clicks]
+        nocs = []
+
+        # for each model, calculate the nocs of each sample
+        for i in range(ious_array.shape[0]):
+            noc = get_noc(ious_array[i], iou_thr=noc_thr, max_clicks=n_clicks)
+            nocs.append(noc)
+
+        ax.hist(nocs, bins=n_clicks, histtype='step', color=color, lw=linewidth, label=improve_label(label, True))
+        ax.spines.right.set_visible(False)
+        ax.spines.top.set_visible(False)
+
+    plt.xlabel(f"NoC@{int(noc_thr * 100)}", fontsize=fs)
+    plt.ylabel("Frequency", fontsize=fs)
+    plt.xlim([0, n_clicks + 1])
+    plt.legend(['FocalClick', 'CDNet', 'HRNet'], loc='upper center')
+    if save:
+        plt.savefig(f"epoch_evaluations/histograms/all_models_histogram_{label}.pdf", dpi=300)
+    else:
+        plt.show()
+
+
+def combined_miou_plot(data_dict, model_type, n_clicks, lw=0.5, save=False, font_size=12):
     f, ax = plt.subplots()
     # colors = ['#8c510a','#d8b365','#f6e8c3','#c7eae5','#5ab4ac','#01665e']
     selected_colors = colors[0:len(data_dict)]
@@ -205,7 +233,7 @@ def combined_miou_plot(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
         plt.show()
 
 
-def combined_noc_histogram(data_dict, n_clicks, noc_thr, lw=0.5, save=False, font_size=12):
+def combined_noc_histogram(data_dict, model_type, n_clicks, noc_thr, lw=0.5, save=False, font_size=12):
     f, ax = plt.subplots()
     selected_colors = colors[0:len(data_dict)]
 
@@ -231,7 +259,7 @@ def combined_noc_histogram(data_dict, n_clicks, noc_thr, lw=0.5, save=False, fon
         plt.show()
 
 
-def plot_avg_mask_influence(data_dict, structures_dict, noc_thr, lw=0.5, save=False, font_size=12):
+def plot_avg_mask_influence(data_dict, structures_dict, model_type, noc_thr, lw=0.5, save=False, font_size=12):
     avg_mask_list = []
     avg_nocs = []
     keys = []
@@ -270,7 +298,7 @@ def plot_avg_mask_influence(data_dict, structures_dict, noc_thr, lw=0.5, save=Fa
         plt.show()
 
 
-def combined_delta_relative(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
+def combined_delta_relative(data_dict, model_type, n_clicks, lw=0.5, save=False, font_size=12):
     selected_colors = colors[0:len(data_dict)]
 
     f, ax = plt.subplots()
@@ -292,7 +320,7 @@ def combined_delta_relative(data_dict, n_clicks, lw=0.5, save=False, font_size=1
         plt.show()
 
 
-def combined_delta_absolute(data_dict, n_clicks, lw=0.5, save=False, font_size=12):
+def combined_delta_absolute(data_dict, model_type, n_clicks, lw=0.5, save=False, font_size=12):
     selected_colors = colors[0:len(data_dict)]
 
     f, ax = plt.subplots()
@@ -312,7 +340,7 @@ def combined_delta_absolute(data_dict, n_clicks, lw=0.5, save=False, font_size=1
         plt.show()
 
 
-def create_latex_table(structures_dict):
+def create_latex_table(structures_dict, exp_path):
     latex_table_string = ''
 
     for key in structures_dict:
@@ -320,10 +348,10 @@ def create_latex_table(structures_dict):
         label = improve_label(key, abbreviations=True)
         latex_table_string = latex_table_string + label + " & "
 
-        for model in os.listdir(experiments_path):
+        for model in os.listdir(exp_path):
             if key not in model or "hrnet" in model:
                 continue
-            model_path = experiments_path + model + "/"
+            model_path = exp_path + model + "/"
             for model_try in os.listdir(model_path):
                 if structures_dict[key]['try'] not in model_try:
                     continue
@@ -351,43 +379,43 @@ def create_latex_table(structures_dict):
 
 
 if __name__ == "__main__":
-    fs = 13
-    linew = 1
+    colors = ["#e28743", '#117733', '#332288', '#88CCEE', '#DDCC77', '#44AA99', '#CC6677', '#882255', '#AA4499']
+    linewidth = 1
+    fs = 12
 
-    model_type = 'cdnet'
+    experiments_path_segformer = "./experiments/focalclick/"
+    experiments_path_cdnet = "./experiments/cdnet/"
+    experiments_path_hrnet = '../ritm_interactive_segmentation/experiments/iter_mask/'
 
-    if model_type == 'segformer':
-        experiments_path = "./experiments/focalclick/"
-        structures = {'aorta': {'try': '000', 'epoch': 49, 'avg_mask': 3000},
-                      'arteria_mesenterica_superior': {'try': '000', 'epoch': 39, 'avg_mask': 252},
-                      'common_bile_duct': {'try': '000', 'epoch': 169, 'avg_mask': 501},
-                      'gastroduodenalis': {'try': '000', 'epoch': 69, 'avg_mask': 61},
-                      'pancreas': {'try': '000', 'epoch': 49, 'avg_mask': 979},
-                      'pancreatic_duct': {'try': '000', 'epoch': 79, 'avg_mask': 162},
-                      'tumour': {'try': '000', 'epoch': 109, 'avg_mask': 75}}
-    elif model_type == 'cdnet':
-        experiments_path = "./experiments/cdnet/"
-        structures = {'aorta': {'try': '000', 'epoch': 19, 'avg_mask': 3000},
-                      'arteria_mesenterica_superior': {'try': '000', 'epoch': 39, 'avg_mask': 252},
-                      'common_bile_duct': {'try': '000', 'epoch': 29, 'avg_mask': 501},
-                      'gastroduodenalis': {'try': '000', 'epoch': 59, 'avg_mask': 61},
-                      'pancreas': {'try': '000', 'epoch': 19, 'avg_mask': 979},
-                      'pancreatic_duct': {'try': '000', 'epoch': 9, 'avg_mask': 162},
-                      'tumour': {'try': '000', 'epoch': 19, 'avg_mask': 75}}
-    else:
-        raise ValueError(f"Expected model_type cdnet or segformer, not {model_type}")
+    structures_segformer = {'aorta': {'try': '000', 'epoch': 49, 'avg_mask': 3000},
+                            'arteria_mesenterica_superior': {'try': '000', 'epoch': 39, 'avg_mask': 252},
+                            'common_bile_duct': {'try': '000', 'epoch': 169, 'avg_mask': 501},
+                            'gastroduodenalis': {'try': '000', 'epoch': 69, 'avg_mask': 61},
+                            'pancreas': {'try': '000', 'epoch': 49, 'avg_mask': 979},
+                            'pancreatic_duct': {'try': '000', 'epoch': 79, 'avg_mask': 162},
+                            'tumour': {'try': '000', 'epoch': 109, 'avg_mask': 75}}
+    structures_cdnet = {'aorta': {'try': '000', 'epoch': 19, 'avg_mask': 3000},
+                        'arteria_mesenterica_superior': {'try': '000', 'epoch': 39, 'avg_mask': 252},
+                        'common_bile_duct': {'try': '000', 'epoch': 29, 'avg_mask': 501},
+                        'gastroduodenalis': {'try': '000', 'epoch': 59, 'avg_mask': 61},
+                        'pancreas': {'try': '000', 'epoch': 19, 'avg_mask': 979},
+                        'pancreatic_duct': {'try': '000', 'epoch': 9, 'avg_mask': 162},
+                        'tumour': {'try': '000', 'epoch': 19, 'avg_mask': 75}}
+    structures_hrnet = {'aorta': {'try': '001', 'epoch': 169, 'avg_mask': 3001},
+                        'arteria_mesenterica_superior': {'try': '001', 'epoch': 119, 'avg_mask': 252},
+                        'common_bile_duct': {'try': '001', 'epoch': 110, 'avg_mask': 501},
+                        'gastroduodenalis': {'try': '001', 'epoch': 29, 'avg_mask': 61},
+                        'pancreas': {'try': '002', 'epoch': 149, 'avg_mask': 979},
+                        'pancreatic_duct': {'try': '000', 'epoch': 179, 'avg_mask': 162},
+                        'tumour': {'try': '000', 'epoch': 159, 'avg_mask': 75}}
 
-    # boundary_progression_plot(structures, lw=linew)
-    # in_out_plot(structures, save=True, font_size=12)  # only do this one if you're really sure, since it takes ages
+    # loads test set results
+    data_segformer = load_data_to_plot(structures_segformer, experiments_path_segformer, 'segformer', ious=True)
+    data_cdnet = load_data_to_plot(structures_cdnet, experiments_path_cdnet, 'cdnet', ious=True)
+    data_hrnet = load_data_to_plot(structures_hrnet, experiments_path_hrnet, 'hrnet', ious=True)
 
-    # create_latex_table(structures)
-    
-    data = load_data_to_plot(structures)
+    data_all_models = [data_segformer, data_cdnet, data_hrnet]
 
-    # plot_avg_mask_influence(data, structures, noc_thr=0.8, save=True, font_size=fs)
-    # single_noc_histogram(data, 'Pancreas', n_clicks=50, noc_thr=0.8, lw=0.5, save=True, font_size=fs)
-    # combined_miou_plot(data, n_clicks=20, lw=linew, font_size=fs, save=True)
-    # combined_noc_histogram(data, n_clicks=50, noc_thr=0.8)
-    # combined_noc_histogram(data, n_clicks=30, noc_thr=0.8)
-    # combined_delta_absolute(data, n_clicks=50)
-    # combined_delta_absolute(data, n_clicks=20, save=False)
+    # plots with all three models
+    for key in structures_hrnet:
+        all_models_noc_histogram(key, n_clicks=50, noc_thr=0.8, save=True)
