@@ -20,7 +20,7 @@ def init_model(cfg):
     model_cfg.crop_size = (96, 96)
     model_cfg.num_max_points = 24
     model = DeeplabModel(backbone='resnet34', deeplab_ch=128, aspp_dropout=0.20, use_leaky_relu=True,
-                         use_rgb_conv=False, use_disks=True, norm_radius=5, with_prev_mask=True)
+                         use_rgb_conv=False, use_disks=True, norm_radius=1, with_prev_mask=True)
     model.to(cfg.device)
     model.apply(initializer.XavierGluon(rnd_type='gaussian', magnitude=2.0))
     model.feature_extractor.load_pretrained_weights()

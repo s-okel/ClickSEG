@@ -5,4 +5,11 @@
 #SBATCH --mail-type=fail,end
 #SBATCH --mail-user=sanne.okel@philips.com
 
-python train.py ./models/focalclick/hrnet18s_S2_sbd.py --exp-name=hrnet18s_S2_sbd
+python train.py ./models/cdnet/cdnet_res34_aorta.py --exp-name=cdnet_res34_aorta_radius_1
+python train.py ./models/cdnet/cdnet_res34_arteria_mesenterica_superior.py --exp-name=cdnet_res34_arteria_mesenterica_superior_radius_1
+python train.py ./models/cdnet/cdnet_res34_common_bile_duct.py --exp-name=cdnet_res34_common_bile_duct_radius_1
+python train.py ./models/cdnet/cdnet_res34_gastroduodenalis.py --exp-name=cdnet_res34_gastroduodenalis_radius_1
+python train.py ./models/cdnet/cdnet_res34_pancreas.py --exp-name=cdnet_res34_pancreas_radius_1
+python train.py ./models/cdnet/cdnet_res34_pancreatic_duct.py --exp-name=cdnet_res34_pancreatic_duct_radius_1
+python train.py ./models/cdnet/cdnet_res34_tumour.py --exp-name=cdnet_res34_tumour_radius_1
+

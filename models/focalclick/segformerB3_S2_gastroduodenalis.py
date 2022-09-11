@@ -20,7 +20,7 @@ def init_model(cfg):
     model_cfg.num_max_points = 24
 
     model = SegFormerModel(pipeline_version='s2', model_version='b3',
-                           use_leaky_relu=True, use_rgb_conv=False, use_disks=True, norm_radius=5,
+                           use_leaky_relu=True, use_rgb_conv=False, use_disks=True, norm_radius=1,
                            binary_prev_mask=False, with_prev_mask=True, with_aux_output=True)
     model.to(cfg.device)
     model.feature_extractor.load_pretrained_weights(cfg.IMAGENET_PRETRAINED_MODELS.SEGFORMER_B3)

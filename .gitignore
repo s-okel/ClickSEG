@@ -4,3 +4,5 @@ experiments/
 *__pycache__*
 slurm*
 epoch_evaluations/
+data/*.pkl
+data/*.json
