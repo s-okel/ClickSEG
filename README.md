@@ -6,6 +6,16 @@
 ## Introduction 
 ClickSEG is codebase for click-based interactive segmentation developped on [RITM codebase][ritmcode]. 
 
+## What can be found where
+- `experiments/[cdnet OR focalclick]/[cdnet_res34 OR segformerB3_S2]_[structure]/checkpoints`
+  - The model weights as .pth files
+  - Train and validation losses after each epoch (.txt file)
+- `experiments/[cdnet OR focalclick]/[cdnet_res34 OR segformerB3_S2]_[structure]/evaluation_logs/[epoch]`
+  - Pickle with both IoU and DSC after each click for all images (.pickle file)
+  - Summary of performance for the epoch (.txt file) 
+- `epoch_evaluations`
+  - Figures and performances of all epochs combined
+
 ## What's New?
 Compared with the repo of [RITM codebase][ritmcode], ClickSEG has following new features:
 
