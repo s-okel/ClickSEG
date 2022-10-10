@@ -8,6 +8,7 @@ import cv2
 import torch
 import numpy as np
 from tqdm import tqdm
+from time import time
 from torch.utils.data import DataLoader
 
 from isegm.utils.log import logger, TqdmToLogger, SummaryWriterAvg
@@ -123,15 +124,21 @@ class ISTrainer(object):
                 click_model.eval()
 
     def run(self, num_epochs, start_epoch=None, validation=True):
+        start_time = time()
         if start_epoch is None:
             start_epoch = self.cfg.start_epoch
 
         logger.info(f'Starting Epoch: {start_epoch}')
         logger.info(f'Total Epochs: {num_epochs}')
         for epoch in range(start_epoch, num_epochs):
+            start_time_epoch = time()
             self.training(epoch)
             if validation:
                 self.validation(epoch)
+            end_time_epoch = time()
+            print(f"Elapsed time one epoch: {end_time_epoch - start_time_epoch}")
+        end_time = time()
+        print(f"Total elapsed time: {end_time - start_time} for {num_epochs} epochs")
 
     def training(self, epoch):
         if self.sw is None and self.is_master:
@@ -250,15 +257,16 @@ class ISTrainer(object):
                 val_metric = metric.get_epoch_value()
                 self.sw.add_scalar(tag=f'{log_prefix}Metrics/{metric.name}', value=val_metric,
                                    global_step=epoch, disable_avg=True)
-                print(f"Metric name: {metric.name}")
-                print(f"Metric get epoch value: {val_metric}")
+                # print(f"Metric name: {metric.name}")
+                # print(f"Metric get epoch value: {val_metric}")
 
                 if metric.name == 'DiceScore':
                     self.epoch_val_dice.append(val_metric)
                 elif metric.name == "AdaptiveIoU":
                     self.epoch_val_iou.append(val_metric)
                 else:
-                    print("Metric not saved")
+                    pass
+                    # print("Metric not saved")
 
         if (epoch + 1) % 10 == 0:
             save_checkpoint(self.net, self.cfg.CHECKPOINTS_PATH, prefix=self.task_prefix, epoch=None,
