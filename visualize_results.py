@@ -259,6 +259,80 @@ def combined_noc_histogram(data_dict, model_type, n_clicks, noc_thr, lw=0.5, sav
         plt.show()
 
 
+def all_models_mask_influence(noc_thr, n_clicks, save=False):
+    selected_colors = colors[:len(data_all_models)]
+    selected_styles = linestyles[:len(data_all_models)]
+
+    f, ax = plt.subplots()
+    ax2 = ax.twiny()
+    xtick_locs = []
+    xtick_labels = []
+    coeffs = []  # will be three values
+
+    for data_dict, color, l_style, m_style, model_type in zip(data_all_models, selected_colors,
+                                                              selected_styles, ['x', 'o', '+'],
+                                                              ['FocalClick', 'CDNet', 'RITM']):
+        mask_sizes = []
+        nocs = []
+
+        ax.plot(-10, -10, marker=m_style, label=model_type, linestyle=l_style, color=color)
+
+        for key in data_dict:
+            noc, _ = compute_noc_metric(data_dict[key], [noc_thr], n_clicks)
+            nocs.append(noc[0])
+            mask_size = structures_hrnet[key]['avg_mask']
+            mask_sizes.append(mask_size)
+
+            ax.plot(mask_size, noc, m_style, color=color, lw=linewidth)
+
+        # add linear fits
+        coeff = np.squeeze(np.polyfit(mask_sizes, nocs, 1))
+        coeffs.append(coeff[0])
+        poly_fn = np.poly1d(coeff)
+        print(mask_sizes)
+        popt, _ = scipy.optimize.curve_fit(lambda t, a, b: a / t + b, mask_sizes, nocs, p0=(22, 28))
+        mask_sizes.sort()
+        ax.plot(mask_sizes, poly_fn(mask_sizes), color=color, lw=linewidth, linestyle=l_style)
+
+        # add inverse fits
+        print(f"Mask sizes: {mask_sizes}\nnocs: {nocs}")
+
+        print(f"Exponential fit: {popt}")
+        ax.plot(mask_sizes, popt[0] / mask_sizes + popt[1])
+
+    for key in structures_hrnet:
+        xtick_locs.append(structures_hrnet[key]['avg_mask'])
+        if key == 'tumour':
+            xtick_labels.append('       ' + improve_label(key, True))
+        else:
+            xtick_labels.append(improve_label(key, True))
+
+    ax.set_xlabel("Average mask size", fontsize=fs)
+    ax.set_ylabel(f"NoC@{int(100 * noc_thr)}", fontsize=fs)
+    ax2.set_xticks(xtick_locs)
+    ax2.set_xticklabels(xtick_labels, rotation=90, fontsize=fs)
+    plt.ylim([0, n_clicks])
+    ax.set_xlim([0, 3020])
+    ax2.set_xlim([0, 3020])
+    ax.grid(visible=True, which='both', axis='both')
+    # ax2.grid(visible=True, which='both', axis='both')
+    ax.spines.right.set_visible(False)
+    ax.spines.top.set_visible(False)
+    ax2.spines.right.set_visible(False)
+    ax2.spines.top.set_visible(False)
+    # create line to tumor label
+    avg_tumour_mask = structures_hrnet['tumour']['avg_mask']
+    ax.plot([avg_tumour_mask, avg_tumour_mask], [n_clicks, n_clicks * 1.15], color='k', clip_on=False, lw=0.5)
+    plt.tight_layout()
+    ax.legend(loc=(2250 / 3010, 35 / 50))
+
+    if save:
+        plt.savefig(f"epoch_evaluations/all_models_noc_vs_mask_size_{metric}.png", dpi=300, transparent=True)
+    else:
+        plt.show()
+    return coeffs
+
+
 def plot_avg_mask_influence(data_dict, structures_dict, model_type, noc_thr, lw=0.5, save=False, font_size=12):
     avg_mask_list = []
     avg_nocs = []
