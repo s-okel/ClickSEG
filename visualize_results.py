@@ -372,6 +372,31 @@ def plot_avg_mask_influence(data_dict, structures_dict, model_type, noc_thr, lw=
         plt.show()
 
 
+def contrast_influence(save=False):
+    with open('./data/contrast_difference.json', 'r') as f:
+        contrast_dict = json.load(f)
+
+    print(contrast_dict)
+
+    poly_fn_seg = np.poly1d(np.squeeze(np.polyfit(contrast_dict['q2s'], contrast_dict['nocs_segformer'], 1)))
+    poly_fn_cd = np.poly1d(np.squeeze(np.polyfit(contrast_dict['q2s'], contrast_dict['nocs_cdnet'], 1)))
+    poly_fn_hr = np.poly1d(np.squeeze(np.polyfit(contrast_dict['q2s'], contrast_dict['nocs_hrnet'], 1)))
+
+    f, ax = plt.subplots()
+    ax.plot(contrast_dict['q2s'], contrast_dict['nocs_segformer'], 'x', color=colors[0], lw=linewidth)
+    ax.plot(contrast_dict['q2s'], contrast_dict['nocs_cdnet'], 'x', color=colors[1], lw=linewidth)
+    ax.plot(contrast_dict['q2s'], contrast_dict['nocs_hrnet'], 'x', color=colors[2], lw=linewidth)
+    ax.plot(contrast_dict['q2s'], poly_fn_seg(contrast_dict['q2s']), color=colors[0], label='FocalClick', lw=linewidth)
+    ax.plot(contrast_dict['q2s'], poly_fn_cd(contrast_dict['q2s']), color=colors[1], label='CDNet', lw=linewidth)
+    ax.plot(contrast_dict['q2s'], poly_fn_hr(contrast_dict['q2s']), color=colors[2], label='RITM', lw=linewidth)
+    ax.set_xlabel('Absolute difference HU in/out', fontsize=fs)
+    ax.set_ylabel(f"NoC@80", fontsize=fs)
+    ax.grid(visible=True, which='both', axis='both')
+    ax.spines.right.set_visible(False)
+    ax.spines.top.set_visible(False)
+    plt.show()
+
+
 def combined_delta_relative(data_dict, model_type, n_clicks, lw=0.5, save=False, font_size=12):
     selected_colors = colors[0:len(data_dict)]
 
